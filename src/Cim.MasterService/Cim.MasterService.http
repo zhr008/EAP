@@ -1,0 +1,6 @@
+@Cim.MasterService_HostAddress = http://localhost:5099
+
+GET {{Cim.MasterService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

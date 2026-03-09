@@ -1,0 +1,302 @@
+syntax = "proto3";
+
+option csharp_namespace = "Cim.GrpcContracts";
+
+package cim;
+
+// 设备状态相关服务
+service EquipmentService {
+  // 获取设备信息
+  rpc GetEquipment (GetEquipmentRequest) returns (EquipmentResponse);
+  // 获取所有设备列表
+  rpc GetAllEquipments (GetAllEquipmentsRequest) returns (EquipmentListResponse);
+  // 更新设备状态
+  rpc UpdateEquipmentState (UpdateEquipmentStateRequest) returns (CommonResponse);
+  // 获取设备变量
+  rpc GetVariable (GetVariableRequest) returns (VariableResponse);
+  // 设置设备变量
+  rpc SetVariable (SetVariableRequest) returns (CommonResponse);
+}
+
+// 配方管理服务
+service RecipeService {
+  // 获取配方
+  rpc GetRecipe (GetRecipeRequest) returns (RecipeResponse);
+  // 获取所有配方
+  rpc GetAllRecipes (GetAllRecipesRequest) returns (RecipeListResponse);
+  // 创建配方
+  rpc CreateRecipe (CreateRecipeRequest) returns (RecipeResponse);
+  // 更新配方
+  rpc UpdateRecipe (UpdateRecipeRequest) returns (CommonResponse);
+  // 删除配方
+  rpc DeleteRecipe (DeleteRecipeRequest) returns (CommonResponse);
+  // 下载配方到设备
+  rpc DownloadRecipe (DownloadRecipeRequest) returns (CommonResponse);
+  // 从设备上传配方
+  rpc UploadRecipe (UploadRecipeRequest) returns (RecipeResponse);
+  // 选择配方
+  rpc SelectRecipe (SelectRecipeRequest) returns (CommonResponse);
+}
+
+// 报警管理服务
+service AlarmService {
+  // 获取报警
+  rpc GetAlarm (GetAlarmRequest) returns (AlarmResponse);
+  // 获取活动报警
+  rpc GetActiveAlarms (GetActiveAlarmsRequest) returns (AlarmListResponse);
+  // 获取历史报警
+  rpc GetAllAlarms (GetAllAlarmsRequest) returns (AlarmListResponse);
+  // 清除报警
+  rpc ClearAlarm (ClearAlarmRequest) returns (CommonResponse);
+  // 确认报警
+  rpc AcknowledgeAlarm (AcknowledgeAlarmRequest) returns (CommonResponse);
+}
+
+// 事件报告服务
+service EventReportService {
+  // 注册事件
+  rpc RegisterEvent (RegisterEventRequest) returns (CommonResponse);
+  // 获取事件历史
+  rpc GetEvents (GetEventsRequest) returns (EventListResponse);
+}
+
+// 数据采集服务
+service DataCollectionService {
+  // 采集数据
+  rpc CollectData (CollectDataRequest) returns (CommonResponse);
+  // 查询历史数据
+  rpc GetData (GetDataRequest) returns (DataListResponse);
+  // 配置采集
+  rpc ConfigureCollection (ConfigureCollectionRequest) returns (CommonResponse);
+}
+
+// ========== 消息定义 ==========
+
+// 通用响应
+message CommonResponse {
+  bool success = 1;
+  string message = 2;
+  string error_code = 3;
+}
+
+// 设备相关消息
+message GetEquipmentRequest {
+  string equipment_id = 1;
+}
+
+message GetAllEquipmentsRequest {
+  string? equipment_type = 1;
+}
+
+message UpdateEquipmentStateRequest {
+  string equipment_id = 1;
+  int32 state = 2;
+  string reason = 3;
+}
+
+message GetVariableRequest {
+  string equipment_id = 1;
+  string variable_id = 2;
+}
+
+message SetVariableRequest {
+  string equipment_id = 1;
+  string variable_id = 2;
+  string value = 3;
+  int32 data_type = 4;
+}
+
+message EquipmentResponse {
+  bool success = 1;
+  EquipmentInfo equipment = 2;
+  string error_message = 3;
+}
+
+message EquipmentListResponse {
+  repeated EquipmentInfo equipments = 1;
+}
+
+message VariableResponse {
+  bool success = 1;
+  string value = 2;
+  int32 data_type = 3;
+  string error_message = 4;
+}
+
+message EquipmentInfo {
+  string equipment_id = 1;
+  string equipment_type = 2;
+  string host_address = 3;
+  int32 port = 4;
+  int32 device_id = 5;
+  int32 state = 6;
+  int32 connection_status = 7;
+  string current_recipe = 8;
+  string last_heartbeat = 9;
+  map<string, string> variables = 10;
+}
+
+// 配方相关消息
+message GetRecipeRequest {
+  string recipe_id = 1;
+}
+
+message GetAllRecipesRequest {
+  string? equipment_type = 1;
+}
+
+message CreateRecipeRequest {
+  RecipeInfo recipe = 1;
+}
+
+message UpdateRecipeRequest {
+  RecipeInfo recipe = 1;
+}
+
+message DeleteRecipeRequest {
+  string recipe_id = 1;
+}
+
+message DownloadRecipeRequest {
+  string equipment_id = 1;
+  string recipe_id = 2;
+}
+
+message UploadRecipeRequest {
+  string equipment_id = 1;
+  string recipe_id = 2;
+}
+
+message SelectRecipeRequest {
+  string equipment_id = 1;
+  string recipe_id = 2;
+}
+
+message RecipeResponse {
+  bool success = 1;
+  RecipeInfo recipe = 2;
+  string error_message = 3;
+}
+
+message RecipeListResponse {
+  repeated RecipeInfo recipes = 1;
+}
+
+message RecipeInfo {
+  string recipe_id = 1;
+  string recipe_name = 2;
+  string version = 3;
+  string equipment_type = 4;
+  map<string, string> parameters = 5;
+  string created_time = 6;
+  string modified_time = 7;
+  string body = 8;
+}
+
+// 报警相关消息
+message GetAlarmRequest {
+  string alarm_id = 1;
+}
+
+message GetActiveAlarmsRequest {
+  string? equipment_id = 1;
+}
+
+message GetAllAlarmsRequest {
+  string? equipment_id = 1;
+  string? from = 2;
+  string? to = 3;
+}
+
+message ClearAlarmRequest {
+  string alarm_id = 1;
+  string comment = 2;
+}
+
+message AcknowledgeAlarmRequest {
+  string alarm_id = 1;
+  string operator_id = 2;
+}
+
+message AlarmResponse {
+  bool success = 1;
+  AlarmInfo alarm = 2;
+  string error_message = 3;
+}
+
+message AlarmListResponse {
+  repeated AlarmInfo alarms = 1;
+}
+
+message AlarmInfo {
+  string alarm_id = 1;
+  string alarm_code = 2;
+  string description = 3;
+  int32 severity = 4;
+  string raised_time = 5;
+  string cleared_time = 6;
+  bool is_cleared = 7;
+  string equipment_id = 8;
+}
+
+// 事件报告相关消息
+message RegisterEventRequest {
+  string equipment_id = 1;
+  int32 event_id = 2;
+  string event_type = 3;
+  map<string, string> data_items = 4;
+}
+
+message GetEventsRequest {
+  string? equipment_id = 1;
+  string? from = 2;
+  string? to = 3;
+  int32 limit = 4;
+}
+
+message EventListResponse {
+  repeated EventReport events = 1;
+}
+
+message EventReport {
+  string event_id = 1;
+  string equipment_id = 2;
+  int32 event_id_secs = 3;
+  string event_type = 4;
+  string timestamp = 5;
+  map<string, string> data_items = 6;
+  string description = 7;
+}
+
+// 数据采集相关消息
+message CollectDataRequest {
+  string equipment_id = 1;
+  repeated DataCollectionItem items = 2;
+}
+
+message GetDataRequest {
+  string equipment_id = 1;
+  string variable_id = 2;
+  string from = 3;
+  string to = 4;
+}
+
+message ConfigureCollectionRequest {
+  string equipment_id = 1;
+  string variable_id = 2;
+  int32 interval_seconds = 3;
+}
+
+message DataListResponse {
+  repeated DataCollectionItem items = 1;
+}
+
+message DataCollectionItem {
+  string variable_id = 1;
+  string variable_name = 2;
+  string value = 3;
+  int32 data_type = 4;
+  string unit = 5;
+  string timestamp = 6;
+  string equipment_id = 7;
+}

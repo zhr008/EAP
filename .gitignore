@@ -1,0 +1,129 @@
+```
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Dd]epends/
+intermediate/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio Code
+.vscode/
+
+# Visual Studio
+*.user
+*.userosscache
+*.suo
+*.csproj.user
+*.vbproj.user
+*.vcxproj.user
+*.vspscc
+*.vssscc
+*.docstates
+.vs/
+
+# NuGet Packages
+*.nupkg
+packages/
+.nuget/
+.nuget.packages/
+NuGetPackages/
+
+# ASP.NET Core
+bin/
+obj/
+appsettings.Production.json
+appsettings.Staging.json
+
+# Logs
+*.log
+
+# Environment specific settings
+.env
+.env.local
+*.env.*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# IDE
+.idea/
+
+# Coverage reports
+coverage/
+*.coveragexml
+*.xml
+
+# Compiled Python files
+*.pyc
+__pycache__/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Gradle
+.gradle/
+build/
+
+# Target directory (Rust, etc.)
+target/
+
+# Compressed archives
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.gz
+*.rar
+*.7z
+```
