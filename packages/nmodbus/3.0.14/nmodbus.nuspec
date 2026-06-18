@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>NModbus</id>
+    <version>3.0.14</version>
+    <authors>Rich Quackenbush</authors>
+    <owners>Dmitry Turin</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>http://opensource.org/licenses/MIT</licenseUrl>
+    <projectUrl>https://github.com/NModbus/NModbus</projectUrl>
+    <description>NModbus is a C# implementation of the Modbus protocol. Provides connectivity to Modbus slave compatible devices and applications. Supports TCP, and UDP protocols. NModbus it's a fork of NModbus4(https://github.com/NModbus4/NModbus4)</description>
+    <tags>modbus nmodbus tcp udp master slave coreclr</tags>
+    <dependencies>
+      <group targetFramework=".NETFramework4.5" />
+      <group targetFramework=".NETStandard1.3">
+        <dependency id="NETStandard.Library" version="1.6.0" />
+      </group>
+    </dependencies>
+    <references>
+      <reference file="NModbus.dll" />
+    </references>
+  </metadata>
+</package>

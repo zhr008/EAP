@@ -1,0 +1,282 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Secs4Net</name>
+    </assembly>
+    <members>
+        <member name="P:Secs4Net.ISecsConnection.State">
+            <summary>
+            Connection state
+            </summary>
+        </member>
+        <member name="P:Secs4Net.ISecsConnection.IsActive">
+            <summary>
+            Is Active or Passive mode
+            </summary>
+        </member>
+        <member name="P:Secs4Net.ISecsConnection.IpAddress">
+            <summary>
+            When <see cref="P:Secs4Net.ISecsConnection.IsActive"/> is <see langword="true"/> the IP address will be treated remote device's IP address, 
+            opposite the connection will bind on this IP address as Passive mode.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.ISecsConnection.Port">
+            <summary>
+            When <see cref="P:Secs4Net.ISecsConnection.IsActive"/> is <see langword="true"/> the port number will be treated remote device's TCP port number, 
+            opposite the connection will bind on the port number as Passive mode.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.ISecsConnection.DeviceIpAddress">
+            <summary>
+            Remote device's IP address.<br/>
+            In Active mode, it is the same as IPAddress property<br/>
+            In Passive mode, remote IP Address can be resolved successfully only 
+            when <see cref="P:Secs4Net.ISecsConnection.State"/> is <see cref="F:Secs4Net.ConnectionState.Connected"/> or <see cref="F:Secs4Net.ConnectionState.Selected"/>, 
+            otherwise, return "N/A"
+            </summary>
+        </member>
+        <member name="M:Secs4Net.Item.EncodeTo(System.Buffers.IBufferWriter{System.Byte})">
+            <summary>
+            Encode the item to SECS binary format
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Item.Item(System.Int32)">
+            <summary>
+            Indexer of List items.
+            Be careful of setter operation. Since the original slot will be overridden.
+            So, it has no chance to be Disposed along with the List's Dispose method.
+            You can invoke <see cref="M:Secs4Net.Item.Dispose"/> method on the original item by yourself or till the GC collects it.
+            </summary>
+            <exception cref="T:System.NotSupportedException">When the item's <see cref="P:Secs4Net.Item.Format"/> is not <see cref="F:Secs4Net.SecsFormat.List"/></exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"></exception>
+        </member>
+        <member name="P:Secs4Net.Item.Items">
+            <summary>
+            Get List's sub-items
+            </summary>
+            <exception cref="T:System.NotSupportedException">When the item's <see cref="P:Secs4Net.Item.Format"/> is not <see cref="F:Secs4Net.SecsFormat.List"/></exception>
+        </member>
+        <member name="M:Secs4Net.Item.FirstValue``1">
+            <summary>
+            Get the first element of item array value
+            </summary>
+            <typeparam name="T"></typeparam>
+            <returns></returns>
+            <exception cref="T:System.IndexOutOfRangeException">When item is empty or data length less than sizeof(<typeparamref name="T"/>)</exception>
+            <exception cref="T:System.NotSupportedException">when the item's <see cref="P:Secs4Net.Item.Format"/> is <see cref="F:Secs4Net.SecsFormat.List"/> or <see cref="F:Secs4Net.SecsFormat.ASCII"/> or <see cref="F:Secs4Net.SecsFormat.JIS8"/></exception>
+        </member>
+        <member name="M:Secs4Net.Item.FirstValueOrDefault``1(``0)">
+            <summary>
+            Get the first element of item array value
+            </summary>
+            <typeparam name="T"></typeparam>
+            <returns></returns>
+            <exception cref="T:System.NotSupportedException">when <see cref="P:Secs4Net.Item.Format"/> is <see cref="F:Secs4Net.SecsFormat.List"/> or <see cref="F:Secs4Net.SecsFormat.ASCII"/> or <see cref="F:Secs4Net.SecsFormat.JIS8"/></exception>
+        </member>
+        <member name="M:Secs4Net.Item.GetMemory``1">
+            <summary>
+            Get item array as <see cref="T:System.Memory`1"/>
+            </summary>
+            <exception cref="T:System.NotSupportedException">when <see cref="P:Secs4Net.Item.Format"/> is <see cref="F:Secs4Net.SecsFormat.List"/> or <see cref="F:Secs4Net.SecsFormat.ASCII"/> or <see cref="F:Secs4Net.SecsFormat.JIS8"/></exception>
+        </member>
+        <member name="M:Secs4Net.Item.GetString">
+            <summary>
+            Get item string value
+            </summary>
+            <returns></returns>
+            <exception cref="T:System.NotSupportedException">when the <see cref="P:Secs4Net.Item.Format"/> is not <see cref="F:Secs4Net.SecsFormat.ASCII"/> or <see cref="F:Secs4Net.SecsFormat.JIS8"/></exception>
+        </member>
+        <member name="M:Secs4Net.Item.EncodeItemHeader(Secs4Net.SecsFormat,System.Int32,System.Buffers.IBufferWriter{System.Byte})">
+            <summary>
+            Encode Item header
+            </summary>
+            <param name="count">List item count or value bytes length</param>
+        </member>
+        <member name="M:Secs4Net.PrimaryMessageWrapper.TryReplyAsync(Secs4Net.SecsMessage,System.Threading.CancellationToken)">
+            <summary>
+            If the message has already replied, method will return false.
+            </summary>
+            <param name="replyMessage">Reply S9F7 if parameter is null</param>
+            <returns>true, if reply success.</returns>
+        </member>
+        <member name="T:Secs4Net.Resources">
+            <summary>
+              A strongly-typed resource class, for looking up localized strings, etc.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.ResourceManager">
+            <summary>
+              Returns the cached ResourceManager instance used by this class.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.Culture">
+            <summary>
+              Overrides the current thread's CurrentUICulture property for all
+              resource lookups using this strongly typed resource class.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9F1">
+            <summary>
+              Looks up a localized string similar to Unrecognized Device Id.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9F11">
+            <summary>
+              Looks up a localized string similar to Data Too Long.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9F13">
+            <summary>
+              Looks up a localized string similar to Conversation Timeout.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9F3">
+            <summary>
+              Looks up a localized string similar to Unrecognized Stream Type.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9F5">
+            <summary>
+              Looks up a localized string similar to Unrecognized Function Type.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9F7">
+            <summary>
+              Looks up a localized string similar to Illegal Data.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9F9">
+            <summary>
+              Looks up a localized string similar to Transaction Timer Timeout.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.S9Fy">
+            <summary>
+              Looks up a localized string similar to S9Fy message reply..
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.SecsMessageStreamNumberMustLessThan127">
+            <summary>
+              Looks up a localized string similar to Stream number must be less than 127.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.SxF0">
+            <summary>
+              Looks up a localized string similar to Equipment is not online mode.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.Resources.T3Timeout">
+            <summary>
+              Looks up a localized string similar to T3 Timeout!.
+            </summary>
+        </member>
+        <member name="M:Secs4Net.ISecsGem.GetPrimaryMessageAsync(System.Threading.CancellationToken)">
+            <summary>
+            Get primary messages from async-stream
+            </summary>
+            <param name="cancellation"></param>
+        </member>
+        <member name="M:Secs4Net.ISecsGem.SendAsync(Secs4Net.SecsMessage,System.Threading.CancellationToken)">
+            <summary>
+            Send a message to device asynchronously and get reply message.
+            </summary>
+            <param name="message">primary message</param>
+            <returns>Secondary message, or null if <paramref name="message" />'s <see cref="P:Secs4Net.SecsMessage.ReplyExpected"/> is <see langword="false" /> </returns>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.IsActive">
+            <summary>
+            Configure connection as Active or Passive mode.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.IpAddress">
+            <summary>
+            When <see cref="P:Secs4Net.SecsGemOptions.IsActive"/> is <see langword="true"/> the IP address will be treated remote device's IP address, 
+            opposite the connection will bind on this IP address as Passive mode.
+            Default value is "127.0.0.1".
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.Port">
+            <summary>
+            When <see cref="P:Secs4Net.SecsGemOptions.IsActive"/> is <see langword="true"/> the port number will be treated remote device's TCP port number, 
+            opposite the connection will bind on the port number as Passive mode.
+            Default value is 5000.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.T3">
+            <summary>
+            Configure the timeout interval in milliseconds between the primary message sent till to receive the secondary message.
+            Default value is 45000 milliseconds.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.T5">
+            <summary>
+            Configure the timeout interval in milliseconds between the connection state transition from <see cref="F:Secs4Net.ConnectionState.Connecting"/> to <see cref="F:Secs4Net.ConnectionState.Connected"/>.
+            Default value is 10000 milliseconds.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.T6">
+            <summary>
+            Configure the timeout interval in milliseconds between the control message sent till to receive the reply message.
+            Default value is 5000 milliseconds.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.T7">
+            <summary>
+            Configure the timeout interval in milliseconds between the connection state transition from <see cref="F:Secs4Net.ConnectionState.Connected"/> to <see cref="F:Secs4Net.ConnectionState.Selected"/>.
+            Default value is 10000 milliseconds.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.T8">
+            <summary>
+            Configure the timeout interval in milliseconds between the chunk received to next chunk during decoding a <see cref="T:Secs4Net.SecsMessage"/>.
+            Default value is 5000 milliseconds.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.LinkTestInterval">
+            <summary>
+            Configure the timer interval in milliseconds between each <see cref="F:Secs4Net.MessageType.LinkTestRequest"/> request.
+            Default value is 60000.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.SocketReceiveBufferSize">
+            <summary>
+            Configure a value that specifies the size of the receive buffer of the System.Net.Sockets.Socket.
+            Default value is 8192 bytes.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsGemOptions.EncodeBufferInitialSize">
+            <summary>
+            Configure the initial buffer size in bytes for the <see cref="T:Secs4Net.SecsMessage"/> encoding.
+            Default value is 4096 bytes.
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsMessage.S">
+            <summary>
+            message stream number
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsMessage.F">
+            <summary>
+            message function number
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsMessage.ReplyExpected">
+            <summary>
+            expect reply message
+            </summary>
+        </member>
+        <member name="P:Secs4Net.SecsMessage.SecsItem">
+            <summary>
+            the root item of message
+            </summary>
+        </member>
+        <member name="M:Secs4Net.SecsMessage.#ctor(System.Byte,System.Byte,System.Boolean)">
+            <summary>
+            constructor of SecsMessage
+            </summary>
+            <param name="s">message stream number</param>
+            <param name="f">message function number</param>
+            <param name="replyExpected">expect reply message</param>
+        </member>
+    </members>
+</doc>

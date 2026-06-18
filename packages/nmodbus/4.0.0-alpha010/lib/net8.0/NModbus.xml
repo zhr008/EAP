@@ -1,0 +1,193 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>NModbus</name>
+    </assembly>
+    <members>
+        <member name="T:NModbus.Endian.Endianness">
+            <summary>
+            Endianness of a converter
+            </summary>
+        </member>
+        <member name="F:NModbus.Endian.Endianness.LittleEndian">
+            <summary>
+            Little endian - least significant byte first
+            </summary>
+        </member>
+        <member name="F:NModbus.Endian.Endianness.BigEndian">
+            <summary>
+            Big endian - most significant byte first
+            </summary>
+        </member>
+        <member name="M:NModbus.Endian.EndianWriter.WriteSingletonBytes(System.Byte[])">
+            <summary>
+            Only call this for the number of bytes it takes to represent a single element.
+            </summary>
+            <param name="bytes"></param>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Extensions.HexExtensions">
+            <summary>
+            Extensions to aid in the display of binary values in hex format.
+            </summary>
+        </member>
+        <member name="M:NModbus.Extensions.HexExtensions.ToHex(System.Byte)">
+            <summary>
+            Displays a single byte in hex format (e.g. '0x0F')
+            </summary>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="M:NModbus.Extensions.StreamExtensions.TryReadBufferAsync(NModbus.Interfaces.IModbusStream,System.Byte[],System.Threading.CancellationToken)">
+            <summary>
+            Fills the buffer from the stream.
+            </summary>
+            <param name="stream"></param>
+            <param name="buffer"></param>
+            <param name="cancellationToken"></param>
+            <returns>True if the read was successful, false if no data was returned (indiciating that the connection wsa closed).</returns>
+            <exception cref="T:System.IO.IOException"></exception>
+        </member>
+        <member name="T:NModbus.IModbusClientExtensions">
+            <summary>
+            Convenient methods for calling Modbus functions on <see cref="T:NModbus.Interfaces.IModbusClient"/>.
+            </summary>
+        </member>
+        <member name="M:NModbus.IModbusClientExtensions.GetClientFunction``2(NModbus.Interfaces.IModbusClient,System.Byte)">
+            <summary>
+            Throws an exception of the specified function isn't available.
+            </summary>
+            <typeparam name="TRequest"></typeparam>
+            <typeparam name="TResponse"></typeparam>
+            <param name="client"></param>
+            <param name="functionCode"></param>
+            <returns></returns>
+            <exception cref="T:System.Collections.Generic.KeyNotFoundException"></exception>
+        </member>
+        <member name="T:NModbus.Functions.BasicModbusFunctionImplementation`2">
+            <summary>
+            Provides a trivial implementation of <see cref="T:NModbus.Interfaces.IModbusFunctionImplementation`2" /> using a func.
+            </summary>
+            <typeparam name="TRequest"></typeparam>
+            <typeparam name="TResponse"></typeparam>
+        </member>
+        <member name="M:NModbus.Functions.BasicModbusFunctionImplementation`2.#ctor(System.Func{`0,System.Threading.CancellationToken,System.Threading.Tasks.Task{`1}})">
+            <summary>
+            
+            </summary>
+            <param name="func"></param>
+            <exception cref="T:System.ArgumentNullException"></exception>
+        </member>
+        <member name="M:NModbus.Functions.BasicModbusFunctionImplementation`2.ProcessAsync(`0,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="P:NModbus.Functions.ModbusServerFunction`2.MessageSerializer">
+            <summary>
+            The factory for serializing / deserialing the message.
+            </summary>
+        </member>
+        <member name="T:NModbus.Helpers.BitPacker">
+            <summary>
+            Utilities for packing and unpacking bits to and from byte arrays.
+            </summary>
+        </member>
+        <member name="M:NModbus.Helpers.BitPacker.Unpack(System.Byte[],System.UInt16)">
+            <summary>
+            Unpacks the specified number of bits from a byte array.
+            </summary>
+            <param name="buffer"></param>
+            <param name="bitCount"></param>
+            <returns></returns>
+            <exception cref="T:System.ArgumentNullException"></exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"></exception>
+        </member>
+        <member name="M:NModbus.Helpers.BitPacker.Pack(System.Boolean[])">
+            <summary>
+            Packs the specified bits into the least possible number of bytes.
+            </summary>
+            <param name="bits"></param>
+            <returns></returns>
+        </member>
+        <member name="M:NModbus.Helpers.BitPacker.CalculateBytesToPackBits(System.Int32)">
+            <summary>
+            Determine the number of bytes required to pack the specified number of bits in.
+            </summary>
+            <param name="numberOfBits">The total number of bits to store in a byte array.</param>
+            <returns></returns>
+            <exception cref="T:System.ArgumentOutOfRangeException"></exception>
+        </member>
+        <member name="M:NModbus.Helpers.ProtocolDataUnitFactory.CreateException(System.Byte,NModbus.Interfaces.ModbusExceptionCode)">
+            <summary>
+            Creates a Modbus Exception <see cref="T:NModbus.Interfaces.ProtocolDataUnit"/>.
+            </summary>
+            <param name="functionCode"></param>
+            <param name="exceptionCode"></param>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Messages.ModbusMessageSerializer`2">
+            <summary>
+            Handles parsing/creating request and response messages.
+            </summary>
+            <typeparam name="TRequest"></typeparam>
+            <typeparam name="TResponse"></typeparam>
+        </member>
+        <member name="P:NModbus.Messages.ReadReferenceRequest.FileNumber">
+            <summary>
+            While it is allowed for the File Number to be in the range 1 to 0xFFFF, it should be noted that 
+            interoperability with legacy equipment may be compromised if the File Number is greater than 
+            10 (0x0A).
+            </summary>
+        </member>
+        <member name="P:NModbus.Messages.ReadReferenceRequest.RecordNumber">
+            <summary>
+            0x0000 to 0x270F
+            </summary>
+        </member>
+        <member name="P:NModbus.Messages.ReadReferenceRequest.RecordLength">
+            <summary>
+            The amount of data to read.
+            </summary>
+        </member>
+        <member name="T:NModbus.ModbusFunctionCodes">
+            <summary>
+            Supported function codes
+            </summary>
+        </member>
+        <member name="F:NModbus.ModbusFunctionCodes.ErrorMask">
+            <summary>
+            Has the Most Significant Bit Set. Or this with a function code to set the error bit.
+            </summary>
+        </member>
+        <member name="M:NModbus.ModbusFunctionCodes.SetErrorBit(System.Byte)">
+            <summary>
+            Sets the error bit.
+            </summary>
+            <param name="functionCode"></param>
+            <returns></returns>
+        </member>
+        <member name="M:NModbus.ModbusFunctionCodes.RemoveErrorBit(System.Byte)">
+            <summary>
+            Removes the error bit.
+            </summary>
+            <param name="functionCode"></param>
+            <returns></returns>
+        </member>
+        <member name="M:NModbus.ModbusFunctionCodes.IsErrorBitSet(System.Byte)">
+            <summary>
+            Determines if the error bit is set.
+            </summary>
+            <param name="functionCode"></param>
+            <returns></returns>
+        </member>
+        <member name="P:NModbus.ModbusServer.UnitIdentifier">
+            <summary>
+            Gets the unit number of the server device.
+            </summary>
+        </member>
+        <member name="T:NModbus.ModbusStream">
+            <summary>
+            Simple implementation of <see cref="T:NModbus.Interfaces.IModbusStream"/> that wraps a generic <see cref="T:System.IO.Stream"/>.
+            </summary>
+        </member>
+    </members>
+</doc>

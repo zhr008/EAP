@@ -1,0 +1,60 @@
+# 用户特定文件
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# MonoDevelop/Xamarin Studio 用户特定文件
+*.userprefs
+
+# 编译生成的文件
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio 缓存文件
+vs/
+.vs/
+
+# 测试结果
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# .NET Core 文件
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# NuGet 包
+*.nupkg
+#**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+# 发布相关文件
+*.publish.xml
+*.azurePubxml
+PublishScripts/
+
+# 日志和临时文件
+*.log
+*.tmp
+*.bak
+
+# Node.js 工具生成的文件
+node_modules/
+
+# Python 工具生成的文件
+__pycache__/
+*.pyc
+
+# 其他
+*.dbmdl
+*.jfm
+*.pfx
+*.publishsettings

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="log4net" Version="3.3.1" />
+    <PackageReference Include="NModbus" Version="4.0.0-alpha010" />
+    <PackageReference Include="OpcDaNetCore" Version="2.0.0" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.5.378.145" />
+    <PackageReference Include="Secs4Net" Version="3.0.1" />
+    <PackageReference Include="System.IO.Ports" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EAP.Core\EAP.Core.csproj" />
+  </ItemGroup>
+
+  
+
+</Project>

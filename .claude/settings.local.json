@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tee /tmp/test_eqp.log)",
+      "Bash(findstr \":5001\")",
+      "Bash(findstr \":500\")",
+      "Bash(tasklist)",
+      "Bash(findstr \"CIMMonitor\")",
+      "Bash(test_eqp_connection.bat)",
+      "Bash(D:TESTtest_eqp_connection.bat)",
+      "Bash(timeout 15 dotnet run)",
+      "Bash(tee /tmp/cim_full_output.log)",
+      "Bash(python3 /tmp/test_server.py)",
+      "Bash(dotnet build --verbosity minimal)",
+      "Bash(cat bin/Release/net8.0-windows/logs/Error-2025-11-07.log)",
+      "Bash(cat bin/Release/net8.0-windows/logs/Operation-2025-11-07.log)",
+      "Bash(cat bin/Release/net8.0-windows/logs/Device-2025-11-07.log)",
+      "Bash(tee /tmp/cim_start.log)",
+      "Bash(cat /tmp/cim_start.log)",
+      "Bash(cat /tmp/server_output.log)",
+      "Bash(tree HsmsSimulator -I \"bin|obj|.vs\" -L 3)",
+      "Bash(cat /d/TEST/HsmsSimulator/HsmsSimulator.csproj)",
+      "Bash(cat /d/TEST/HsmsSimulator/Program.cs)",
+      "Bash(cat /d/TEST/HsmsSimulator/MainForm.cs)",
+      "Bash(cat /d/TEST/HsmsSimulator/MainForm.Designer.cs)",
+      "Bash(cat /d/TEST/HsmsSimulator/CustomSendDialog.cs)",
+      "Bash(cat /d/TEST/HsmsSimulator/TimeoutSettingsDialog.cs)",
+      "Bash(cat /d/TEST/HsmsSimulator/Device/SimulatedDevice.cs)",
+      "Bash(cat /d/TEST/HsmsSimulator/Models/DeviceParameter.cs)",
+      "Bash(cat \"/d/TEST/独立HSMS服务器/HsmsConfig.xml\")",
+      "Bash(cat \"/d/TEST/独立HSMS服务器/Program.cs\")",
+      "Bash(cat /d/TEST/CIMMonitor/Forms/DeviceMonitorForm.cs)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
