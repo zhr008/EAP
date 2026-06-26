@@ -66,8 +66,10 @@ public class OpcDaClient : ProtocolClientBase
                     _isConnected = true;
                     Logger.Info($"OPC DA client connected successfully: {ConnectionId}");
                     OnConnectionStatusChanged(true, "Connected");
+                    UpdateHeartbeatStatus(true);
 
                     StartPolling();
+                    StartHeartbeat();
                     return true;
                 }
                 else
@@ -122,7 +124,9 @@ public class OpcDaClient : ProtocolClientBase
         try
         {
             StopPolling();
+            StopHeartbeat();
             await WaitForPollingToStopAsync().ConfigureAwait(false);
+            await WaitForHeartbeatToStopAsync().ConfigureAwait(false);
 
             if (_server != null)
             {

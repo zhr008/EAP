@@ -23,6 +23,7 @@ public partial class DeviceInfo : Form
     public bool HeartbeatStatus => _heartbeatManager.IsNormal;
 
     public event EventHandler? ReturnedToMainForm;
+    public event EventHandler? StatusChanged;
 
     #endregion
 
@@ -55,13 +56,10 @@ public partial class DeviceInfo : Form
 
         InitializeComponent();
 
-        // 初始化心跳管理器
+        // 初始化心跳管理器（仅负责UI动画，心跳检测在Core层）
         _heartbeatManager = new HeartbeatManager(
-            timeoutSeconds: 10,
-            intervalMs: 3000,
-            onDrawIcon: DrawHeartbeatIcon,
-            onStatusChanged: OnHeartbeatStatusChanged
-        );
+            intervalMs: 1000,
+            onDrawIcon: DrawHeartbeatIcon);
 
         // 窗体基础设置
         TopLevel = false;
@@ -71,6 +69,7 @@ public partial class DeviceInfo : Form
         // 订阅设备事件
         _deviceManager.ConnectionStatusChanged += OnConnectionStatusChanged;
         _deviceManager.HeartbeatStatusChanged += OnHeartbeatStatusEvent;
+        _deviceManager.DataValueChanged += OnDataValueChanged;
 
         // 初始化显示
         LoadDynamicContent();
@@ -119,18 +118,25 @@ public partial class DeviceInfo : Form
         IsConnected = connected;
 
         UpdateStatusUI();
+        StatusChanged?.Invoke(this, EventArgs.Empty);
 
-        // 根据连接状态启动/停止心跳
+        // 根据连接状态启动/停止心跳动画
         if (connected)
+        {
             _heartbeatManager.Start();
+            // 初始设为正常状态，等待Core层心跳事件确认
+            _heartbeatManager.SetNormal(true);
+        }
         else
+        {
             _heartbeatManager.Stop();
+        }
     }
 
     /// <summary>
     /// 更新心跳状态
-    /// 注意：只要设备已连接，心跳管理器就保持运行，
-    /// 心跳正常时调用 Pulse() 更新时间，心跳异常时通过颜色变化体现
+    /// 心跳状态由Core层通过HeartbeatStatusChanged事件通知
+    /// 这里仅将状态同步到HeartbeatManager用于UI动画展示
     /// </summary>
     public void UpdateHeartbeat(bool isNormal)
     {
@@ -143,13 +149,8 @@ public partial class DeviceInfo : Form
         // 设备未连接时不处理心跳
         if (!IsConnected) return;
 
-        if (isNormal)
-        {
-            // 心跳正常：更新最后心跳时间
-            _heartbeatManager.Pulse();
-        }
-        // 心跳不正常时，不调用 Stop()，让定时器继续运行
-        // 这样心跳图标会持续显示红色（通过 GetStatusColor 方法判断）
+        // 将心跳状态传递给动画管理器
+        _heartbeatManager.SetNormal(isNormal);
     }
 
     /// <summary>
@@ -253,6 +254,33 @@ public partial class DeviceInfo : Form
         UpdateHeartbeat(e.IsNormal);
     }
 
+    private void OnDataValueChanged(object? sender, DataValueChangedEventArgs e)
+    {
+        if (e.ConnectionId != DeviceConfig.DeviceId) return;
+
+        var valueStr = FormatValue(e.Value?.Value);
+        var quality = e.Value?.Quality.ToString() ?? "Unknown";
+        var time = e.Value?.Timestamp.ToString("HH:mm:ss.fff") ?? "N/A";
+        AddLogInfo($"数据更新 - {e.NodeId}: {valueStr} | 质量: {quality} | 时间: {time}");
+    }
+
+    private string FormatValue(object? value)
+    {
+        if (value == null) return "null";
+
+        return value switch
+        {
+            bool[] arr => $"[{string.Join(", ", arr)}]",
+            ushort[] arr => $"[{string.Join(", ", arr)}]",
+            int[] arr => $"[{string.Join(", ", arr)}]",
+            float[] arr => $"[{string.Join(", ", arr)}]",
+            double[] arr => $"[{string.Join(", ", arr)}]",
+            byte[] arr => $"[Byte[{arr.Length}]]",
+            Array arr => $"[{string.Join(", ", arr.Cast<object>().Select(o => o?.ToString() ?? "null"))}]",
+            _ => value.ToString() ?? "null"
+        };
+    }
+
     private void OnHeartbeatStatusChanged(bool isNormal)
     {
         // 心跳状态变化时的额外处理
@@ -329,6 +357,7 @@ public partial class DeviceInfo : Form
     {
         _deviceManager.ConnectionStatusChanged -= OnConnectionStatusChanged;
         _deviceManager.HeartbeatStatusChanged -= OnHeartbeatStatusEvent;
+        _deviceManager.DataValueChanged -= OnDataValueChanged;
         _heartbeatManager.Stop();
         _heartbeatManager.Dispose();
     }

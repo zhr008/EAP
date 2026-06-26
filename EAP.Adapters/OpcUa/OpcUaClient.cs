@@ -97,6 +97,8 @@ public class OpcUaClient : ProtocolClientBase
 
                 Logger.Info($"OPC UA client connected successfully: {ConnectionId}");
                 OnConnectionStatusChanged(true, "Connected");
+                UpdateHeartbeatStatus(true);
+                StartHeartbeat();
 
                 return true;
             }
@@ -178,6 +180,9 @@ public class OpcUaClient : ProtocolClientBase
         await _connectLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            StopHeartbeat();
+            await WaitForHeartbeatToStopAsync().ConfigureAwait(false);
+
             if (_reconnectHandler != null)
             {
                 try

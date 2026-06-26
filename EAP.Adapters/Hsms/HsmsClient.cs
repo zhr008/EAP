@@ -15,7 +15,6 @@ public class HsmsClient : ProtocolClientBase
     private bool _isConnected;
     private CancellationTokenSource? _messageLoopCts;
     private CancellationTokenSource? _connectionCts;
-    private CancellationTokenSource? _heartbeatCts;
 
     public override ProtocolType ProtocolType => ProtocolType.Hsms;
     public override bool IsConnected => _isConnected;
@@ -85,6 +84,7 @@ public class HsmsClient : ProtocolClientBase
                     _isConnected = true;
                     DeviceLogger.Info(_deviceConfig.DeviceId, $"HSMS client connected successfully: {ConnectionId}, state: {_connection.State}");
                     OnConnectionStatusChanged(true, "Connected");
+                    UpdateHeartbeatStatus(true);
                     StartMessageLoop();
                     StartHeartbeat();
                     return true;
@@ -173,44 +173,6 @@ public class HsmsClient : ProtocolClientBase
         });
     }
 
-    private void StartHeartbeat()
-    {
-        _heartbeatCts = new CancellationTokenSource();
-        _ = Task.Run(async () =>
-        {
-            while (!_heartbeatCts.Token.IsCancellationRequested && IsConnected)
-            {
-                try
-                {
-                    await Task.Delay(5000, _heartbeatCts.Token).ConfigureAwait(false);
-                    
-                    if (_connection != null && _isConnected)
-                    {
-                        if (_connection.State != ConnectionState.Connected && _connection.State != ConnectionState.Selected)
-                        {
-                            _isConnected = false;
-                            DeviceLogger.Error(_deviceConfig.DeviceId, $"HSMS heartbeat failed, state: {_connection.State}");
-                            OnConnectionStatusChanged(false, "Heartbeat failed");
-                            break;
-                        }
-                        else
-                        {
-                            UpdateHeartbeatStatus(true);
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    DeviceLogger.Error(_deviceConfig.DeviceId, $"HSMS heartbeat error: {ex.Message}", ex);
-                }
-            }
-        });
-    }
-
     private void ProcessPrimaryMessage(PrimaryMessageWrapper e)
     {
         try
@@ -290,7 +252,9 @@ public class HsmsClient : ProtocolClientBase
         {
             _isConnected = false;
             StopPolling();
+            StopHeartbeat();
             await WaitForPollingToStopAsync().ConfigureAwait(false);
+            await WaitForHeartbeatToStopAsync().ConfigureAwait(false);
 
             Cleanup();
             DeviceLogger.Info(_deviceConfig.DeviceId, $"HSMS client disconnected: {ConnectionId}");
@@ -314,10 +278,6 @@ public class HsmsClient : ProtocolClientBase
 
     private void Cleanup()
     {
-        _heartbeatCts?.Cancel();
-        _heartbeatCts?.Dispose();
-        _heartbeatCts = null;
-
         _messageLoopCts?.Cancel();
         _messageLoopCts?.Dispose();
         _messageLoopCts = null;
@@ -345,21 +305,44 @@ public class HsmsClient : ProtocolClientBase
         _connection = null;
     }
 
-    public override Task<DataValue> ReadNodeAsync(string nodeId, CancellationToken cancellationToken = default)
+    public override async Task<DataValue> ReadNodeAsync(string nodeId, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || _secsGem == null)
         {
             DeviceLogger.Warn(_deviceConfig.DeviceId, $"HSMS client not connected, cannot read node: {nodeId}");
-            return Task.FromResult(EAP.Core.DataValue.NotConnected());
+            return EAP.Core.DataValue.NotConnected();
         }
 
         DeviceLogger.Debug(_deviceConfig.DeviceId, $"Reading HSMS node: {nodeId}");
-        return Task.FromResult(new EAP.Core.DataValue
+
+        try
         {
-            Value = null,
-            Quality = DataQuality.Good,
-            Timestamp = DateTime.UtcNow
-        });
+            var s = byte.Parse(nodeId.Split('F')[0].Replace("S", ""));
+            var f = byte.Parse(nodeId.Split('F')[1]);
+            
+            using var msg = new SecsMessage(s, f);
+            using var reply = await _secsGem.SendAsync(msg, cancellationToken).ConfigureAwait(false);
+            
+            var value = FormatSecsItem(reply.SecsItem);
+            _tagValues[nodeId] = value;
+            
+            return new DataValue
+            {
+                Value = value,
+                Quality = DataQuality.Good,
+                Timestamp = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            DeviceLogger.Error(_deviceConfig.DeviceId, $"Failed to read HSMS node {nodeId}: {ex.Message}", ex);
+            return new DataValue
+            {
+                Value = null,
+                Quality = DataQuality.Bad,
+                Timestamp = DateTime.UtcNow
+            };
+        }
     }
 
     public override async Task<bool> WriteNodeAsync(string nodeId, object value, CancellationToken cancellationToken = default)

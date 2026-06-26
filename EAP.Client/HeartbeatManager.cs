@@ -5,133 +5,104 @@ using System.Windows.Forms;
 namespace EAP.Client;
 
 /// <summary>
-/// 心跳状态管理类
-/// 封装设备心跳检测的逻辑
+/// 心跳动画管理器
+/// 仅负责UI心跳图标的动画效果，心跳状态由外部通过SetNormal()设置
+/// 心跳检测逻辑在Core层ProtocolClientBase中实现
 /// </summary>
-public class HeartbeatManager
+public class HeartbeatManager : IDisposable
 {
-    // 心跳定时器
     private readonly System.Windows.Forms.Timer _timer;
-    
-    // 心跳参数
-    private readonly TimeSpan _timeout;
-    private DateTime _lastHeartbeatTime;
-    
-    // 状态属性
-    public bool IsRunning { get; private set; }
-    public bool IsNormal { get; private set; }
-    
-    // 心跳图标
-    private bool _animationState;
     private readonly Action _onDrawIcon;
-    
-    // 日志回调
-    private readonly Action<bool> _onStatusChanged;
+
+    private bool _animationState;
+    private bool _isNormal;
+    private bool _isRunning;
+
+    public bool IsNormal => _isNormal;
+    public bool IsRunning => _isRunning;
 
     /// <summary>
     /// 构造函数
     /// </summary>
-    /// <param name="timeoutSeconds">心跳超时时间（秒）</param>
-    /// <param name="intervalMs">心跳检查间隔（毫秒）</param>
-    /// <param name="onDrawIcon">绘制心跳图标的回调</param>
-    /// <param name="onStatusChanged">心跳状态变化的回调</param>
-    public HeartbeatManager(int timeoutSeconds = 10, int intervalMs = 3000, 
-        Action? onDrawIcon = null, Action<bool>? onStatusChanged = null)
+    /// <param name="intervalMs">动画切换间隔（毫秒）</param>
+    /// <param name="onDrawIcon">重绘图标的回调</param>
+    public HeartbeatManager(int intervalMs = 1000, Action? onDrawIcon = null)
     {
-        _timeout = TimeSpan.FromSeconds(timeoutSeconds);
-        _onDrawIcon = () => onDrawIcon?.Invoke();
-        _onStatusChanged = onStatusChanged ?? (_ => { });
-        
+        _onDrawIcon = onDrawIcon ?? (() => { });
+
         _timer = new System.Windows.Forms.Timer { Interval = intervalMs };
         _timer.Tick += Timer_Tick;
     }
 
     /// <summary>
-    /// 启动心跳检测
+    /// 启动心跳动画
     /// </summary>
     public void Start()
     {
-        if (!IsRunning)
+        if (!_isRunning)
         {
-            IsRunning = true;
-            _lastHeartbeatTime = DateTime.Now;
+            _isRunning = true;
+            _animationState = false;
             _timer.Start();
             _onDrawIcon();
         }
     }
 
     /// <summary>
-    /// 停止心跳检测
+    /// 停止心跳动画
     /// </summary>
     public void Stop()
     {
-        if (IsRunning)
+        if (_isRunning)
         {
-            IsRunning = false;
-            IsNormal = false;
+            _isRunning = false;
+            _isNormal = false;
             _timer.Stop();
             _onDrawIcon();
         }
     }
 
     /// <summary>
-    /// 更新心跳（收到新数据时调用）
+    /// 设置心跳状态（由外部业务逻辑驱动）
     /// </summary>
-    public void Pulse()
+    /// <param name="isNormal">心跳是否正常</param>
+    public void SetNormal(bool isNormal)
     {
-        _lastHeartbeatTime = DateTime.Now;
-        if (!IsNormal)
+        if (_isNormal != isNormal)
         {
-            IsNormal = true;
-            _onStatusChanged(true);
+            _isNormal = isNormal;
+            _onDrawIcon();
         }
-        _onDrawIcon();
     }
 
     /// <summary>
-    /// 检查是否超时
+    /// 定时器回调 - 仅用于切换动画状态
     /// </summary>
     private void Timer_Tick(object? sender, EventArgs e)
     {
-        if (!IsRunning)
+        if (!_isRunning)
         {
             _timer.Stop();
             return;
         }
 
-        var wasNormal = IsNormal;
-        
-        // 检查是否超时
-        if (DateTime.Now - _lastHeartbeatTime > _timeout)
-        {
-            IsNormal = false;
-        }
-        
-        // 切换动画状态
         _animationState = !_animationState;
-
-        // 如果状态变化，触发回调
-        if (wasNormal != IsNormal)
-        {
-            _onStatusChanged(IsNormal);
-        }
-
-        // 更新图标
         _onDrawIcon();
     }
 
     /// <summary>
     /// 获取心跳状态对应的颜色
     /// </summary>
+    /// <param name="isConnected">设备是否连接</param>
+    /// <returns>图标颜色</returns>
     public Color GetStatusColor(bool isConnected)
     {
-        if (!isConnected)
+        if (!isConnected || !_isRunning)
             return Color.Gray;
-        
-        if (!IsNormal)
+
+        if (!_isNormal)
             return Color.Red;
-        
-        // 心跳正常：绿色和灰色交替
+
         return _animationState ? Color.Green : Color.FromArgb(128, 128, 128);
     }
 

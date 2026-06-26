@@ -196,17 +196,18 @@ partial class DeviceInfo
         // 
         // _cardCell00
         // 
-        _cardCell00.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-        _cardCell00.ForeColor = Color.FromArgb(102, 102, 102);
+        _cardCell00.Font = new Font("Segoe UI", 8F);
+        _cardCell00.ForeColor = Color.Gray;
         _cardCell00.Location = new Point(3, 3);
         _cardCell00.Name = "_cardCell00";
         _cardCell00.Size = new Size(54, 15);
         _cardCell00.TabIndex = 0;
-        _cardCell00.Text = "设备ID";
+        _cardCell00.Text = "设备ID:";
         // 
         // _cardCell01
         // 
-        _cardCell01.Font = new Font("Segoe UI", 8F);
+        _cardCell01.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+        _cardCell01.ForeColor = Color.Black;
         _cardCell01.Location = new Point(63, 3);
         _cardCell01.Name = "_cardCell01";
         _cardCell01.Size = new Size(84, 15);
@@ -215,17 +216,18 @@ partial class DeviceInfo
         // 
         // _cardCell02
         // 
-        _cardCell02.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-        _cardCell02.ForeColor = Color.FromArgb(102, 102, 102);
+        _cardCell02.Font = new Font("Segoe UI", 8F);
+        _cardCell02.ForeColor = Color.Gray;
         _cardCell02.Location = new Point(294, 3);
         _cardCell02.Name = "_cardCell02";
         _cardCell02.Size = new Size(54, 15);
         _cardCell02.TabIndex = 2;
-        _cardCell02.Text = "设备名称";
+        _cardCell02.Text = "设备名称:";
         // 
         // _cardCell03
         // 
-        _cardCell03.Font = new Font("Segoe UI", 8F);
+        _cardCell03.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+        _cardCell03.ForeColor = Color.Black;
         _cardCell03.Location = new Point(364, 3);
         _cardCell03.Name = "_cardCell03";
         _cardCell03.Size = new Size(84, 15);
@@ -234,17 +236,18 @@ partial class DeviceInfo
         // 
         // _cardCell10
         // 
-        _cardCell10.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-        _cardCell10.ForeColor = Color.FromArgb(102, 102, 102);
+        _cardCell10.Font = new Font("Segoe UI", 8F);
+        _cardCell10.ForeColor = Color.Gray;
         _cardCell10.Location = new Point(3, 48);
         _cardCell10.Name = "_cardCell10";
         _cardCell10.Size = new Size(54, 15);
         _cardCell10.TabIndex = 5;
-        _cardCell10.Text = "启用状态";
+        _cardCell10.Text = "启用状态:";
         // 
         // _cardCell11
         // 
-        _cardCell11.Font = new Font("Segoe UI", 8F);
+        _cardCell11.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+        _cardCell11.ForeColor = Color.Black;
         _cardCell11.Location = new Point(63, 48);
         _cardCell11.Name = "_cardCell11";
         _cardCell11.Size = new Size(84, 15);
@@ -253,13 +256,13 @@ partial class DeviceInfo
         // 
         // _cardCell12
         // 
-        _cardCell12.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-        _cardCell12.ForeColor = Color.FromArgb(102, 102, 102);
+        _cardCell12.Font = new Font("Segoe UI", 8F);
+        _cardCell12.ForeColor = Color.Gray;
         _cardCell12.Location = new Point(294, 48);
         _cardCell12.Name = "_cardCell12";
         _cardCell12.Size = new Size(54, 15);
         _cardCell12.TabIndex = 7;
-        _cardCell12.Text = "是否在线";
+        _cardCell12.Text = "是否在线:";
         // 
         // _onlineStatusCardPanel
         // 
@@ -275,7 +278,8 @@ partial class DeviceInfo
         // _onlineStatusCardLabel
         // 
         _onlineStatusCardLabel.AutoSize = true;
-        _onlineStatusCardLabel.Font = new Font("Segoe UI", 8F);
+        _onlineStatusCardLabel.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+        _onlineStatusCardLabel.ForeColor = Color.Black;
         _onlineStatusCardLabel.Location = new Point(5, 0);
         _onlineStatusCardLabel.Margin = new Padding(5, 0, 0, 0);
         _onlineStatusCardLabel.Name = "_onlineStatusCardLabel";
@@ -295,17 +299,18 @@ partial class DeviceInfo
         // 
         // _cardCell20
         // 
-        _cardCell20.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-        _cardCell20.ForeColor = Color.FromArgb(102, 102, 102);
+        _cardCell20.Font = new Font("Segoe UI", 8F);
+        _cardCell20.ForeColor = Color.Gray;
         _cardCell20.Location = new Point(3, 93);
         _cardCell20.Name = "_cardCell20";
         _cardCell20.Size = new Size(54, 15);
         _cardCell20.TabIndex = 10;
-        _cardCell20.Text = "IP";
+        _cardCell20.Text = "IP:";
         // 
         // _cardCell21
         // 
-        _cardCell21.Font = new Font("Segoe UI", 8F);
+        _cardCell21.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+        _cardCell21.ForeColor = Color.Black;
         _cardCell21.Location = new Point(63, 93);
         _cardCell21.Name = "_cardCell21";
         _cardCell21.Size = new Size(84, 15);
@@ -314,17 +319,18 @@ partial class DeviceInfo
         // 
         // _cardCell22
         // 
-        _cardCell22.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-        _cardCell22.ForeColor = Color.FromArgb(102, 102, 102);
+        _cardCell22.Font = new Font("Segoe UI", 8F);
+        _cardCell22.ForeColor = Color.Gray;
         _cardCell22.Location = new Point(294, 93);
         _cardCell22.Name = "_cardCell22";
         _cardCell22.Size = new Size(54, 15);
         _cardCell22.TabIndex = 12;
-        _cardCell22.Text = "端口";
+        _cardCell22.Text = "端口:";
         // 
         // _cardCell23
         // 
-        _cardCell23.Font = new Font("Segoe UI", 8F);
+        _cardCell23.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+        _cardCell23.ForeColor = Color.Black;
         _cardCell23.Location = new Point(364, 93);
         _cardCell23.Name = "_cardCell23";
         _cardCell23.Size = new Size(84, 15);
@@ -369,7 +375,8 @@ partial class DeviceInfo
         // _onlineStatusFullLabel
         // 
         _onlineStatusFullLabel.AutoSize = true;
-        _onlineStatusFullLabel.Font = new Font("Segoe UI", 9F);
+        _onlineStatusFullLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        _onlineStatusFullLabel.ForeColor = Color.Black;
         _onlineStatusFullLabel.Location = new Point(0, 4);
         _onlineStatusFullLabel.Margin = new Padding(0, 4, 4, 0);
         _onlineStatusFullLabel.Name = "_onlineStatusFullLabel";
@@ -455,7 +462,7 @@ partial class DeviceInfo
         // _valueId
         // 
         _valueId.AutoSizeMode = TAutoSize.Auto;
-        _valueId.Font = new Font("Segoe UI", 9F);
+        _valueId.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueId.ForeColor = Color.Black;
         _valueId.Location = new Point(83, 3);
         _valueId.Name = "_valueId";
@@ -477,7 +484,7 @@ partial class DeviceInfo
         // _valueName
         // 
         _valueName.AutoSizeMode = TAutoSize.Auto;
-        _valueName.Font = new Font("Segoe UI", 9F);
+        _valueName.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueName.ForeColor = Color.Black;
         _valueName.Location = new Point(382, 3);
         _valueName.Name = "_valueName";
@@ -499,7 +506,7 @@ partial class DeviceInfo
         // _valueEnabled
         // 
         _valueEnabled.AutoSizeMode = TAutoSize.Auto;
-        _valueEnabled.Font = new Font("Segoe UI", 9F);
+        _valueEnabled.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueEnabled.ForeColor = Color.Black;
         _valueEnabled.Location = new Point(83, 33);
         _valueEnabled.Name = "_valueEnabled";
@@ -532,7 +539,7 @@ partial class DeviceInfo
         // _valueTimeout
         // 
         _valueTimeout.AutoSizeMode = TAutoSize.Auto;
-        _valueTimeout.Font = new Font("Segoe UI", 9F);
+        _valueTimeout.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueTimeout.ForeColor = Color.Black;
         _valueTimeout.Location = new Point(83, 63);
         _valueTimeout.Name = "_valueTimeout";
@@ -554,7 +561,7 @@ partial class DeviceInfo
         // _valueUpdateRate
         // 
         _valueUpdateRate.AutoSizeMode = TAutoSize.Auto;
-        _valueUpdateRate.Font = new Font("Segoe UI", 9F);
+        _valueUpdateRate.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueUpdateRate.ForeColor = Color.Black;
         _valueUpdateRate.Location = new Point(382, 63);
         _valueUpdateRate.Name = "_valueUpdateRate";
@@ -574,9 +581,9 @@ partial class DeviceInfo
         // _fullTable2
         // 
         _fullTable2.ColumnCount = 4;
-        _fullTable2.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
+        _fullTable2.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
         _fullTable2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-        _fullTable2.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
+        _fullTable2.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
         _fullTable2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
         _fullTable2.Controls.Add(_labelRow1Col1, 0, 0);
         _fullTable2.Controls.Add(_valueRow1Col1, 1, 0);
@@ -614,9 +621,9 @@ partial class DeviceInfo
         // _valueRow1Col1
         // 
         _valueRow1Col1.AutoSizeMode = TAutoSize.Auto;
-        _valueRow1Col1.Font = new Font("Segoe UI", 9F);
+        _valueRow1Col1.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueRow1Col1.ForeColor = Color.Black;
-        _valueRow1Col1.Location = new Point(83, 3);
+        _valueRow1Col1.Location = new Point(73, 3);
         _valueRow1Col1.Name = "_valueRow1Col1";
         _valueRow1Col1.Size = new Size(5, 16);
         _valueRow1Col1.TabIndex = 1;
@@ -636,9 +643,9 @@ partial class DeviceInfo
         // _valueRow1Col2
         // 
         _valueRow1Col2.AutoSizeMode = TAutoSize.Auto;
-        _valueRow1Col2.Font = new Font("Segoe UI", 9F);
+        _valueRow1Col2.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueRow1Col2.ForeColor = Color.Black;
-        _valueRow1Col2.Location = new Point(382, 3);
+        _valueRow1Col2.Location = new Point(372, 3);
         _valueRow1Col2.Name = "_valueRow1Col2";
         _valueRow1Col2.Size = new Size(5, 16);
         _valueRow1Col2.TabIndex = 3;
@@ -658,9 +665,9 @@ partial class DeviceInfo
         // _valueRow2Col1
         // 
         _valueRow2Col1.AutoSizeMode = TAutoSize.Auto;
-        _valueRow2Col1.Font = new Font("Segoe UI", 9F);
+        _valueRow2Col1.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueRow2Col1.ForeColor = Color.Black;
-        _valueRow2Col1.Location = new Point(83, 33);
+        _valueRow2Col1.Location = new Point(73, 33);
         _valueRow2Col1.Name = "_valueRow2Col1";
         _valueRow2Col1.Size = new Size(5, 16);
         _valueRow2Col1.TabIndex = 5;
@@ -680,9 +687,9 @@ partial class DeviceInfo
         // _valueRow2Col2
         // 
         _valueRow2Col2.AutoSizeMode = TAutoSize.Auto;
-        _valueRow2Col2.Font = new Font("Segoe UI", 9F);
+        _valueRow2Col2.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueRow2Col2.ForeColor = Color.Black;
-        _valueRow2Col2.Location = new Point(382, 33);
+        _valueRow2Col2.Location = new Point(372, 33);
         _valueRow2Col2.Name = "_valueRow2Col2";
         _valueRow2Col2.Size = new Size(5, 16);
         _valueRow2Col2.TabIndex = 7;
@@ -702,9 +709,9 @@ partial class DeviceInfo
         // _valueRow3Col1
         // 
         _valueRow3Col1.AutoSizeMode = TAutoSize.Auto;
-        _valueRow3Col1.Font = new Font("Segoe UI", 9F);
+        _valueRow3Col1.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueRow3Col1.ForeColor = Color.Black;
-        _valueRow3Col1.Location = new Point(83, 63);
+        _valueRow3Col1.Location = new Point(73, 63);
         _valueRow3Col1.Name = "_valueRow3Col1";
         _valueRow3Col1.Size = new Size(5, 16);
         _valueRow3Col1.TabIndex = 9;
@@ -724,9 +731,9 @@ partial class DeviceInfo
         // _valueRow3Col2
         // 
         _valueRow3Col2.AutoSizeMode = TAutoSize.Auto;
-        _valueRow3Col2.Font = new Font("Segoe UI", 9F);
+        _valueRow3Col2.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueRow3Col2.ForeColor = Color.Black;
-        _valueRow3Col2.Location = new Point(382, 63);
+        _valueRow3Col2.Location = new Point(372, 63);
         _valueRow3Col2.Name = "_valueRow3Col2";
         _valueRow3Col2.Size = new Size(5, 16);
         _valueRow3Col2.TabIndex = 11;
@@ -735,7 +742,7 @@ partial class DeviceInfo
         // _valueOnline
         // 
         _valueOnline.AutoSizeMode = TAutoSize.Auto;
-        _valueOnline.Font = new Font("Segoe UI", 9F);
+        _valueOnline.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _valueOnline.ForeColor = Color.Black;
         _valueOnline.Location = new Point(382, 33);
         _valueOnline.Name = "_valueOnline";

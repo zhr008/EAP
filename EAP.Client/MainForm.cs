@@ -44,8 +44,6 @@ public partial class MainForm : Form
     {
         _deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
         InitializeComponent();
-
-        SubscribeToEvents();
         InitializeMonitor();
     }
 
@@ -86,7 +84,7 @@ public partial class MainForm : Form
 
             // 连接所有设备
             _statusBar.Text = $"加载完成 - {devices.Count} 台设备，正在连接...";
-            await Task.Run(() => _deviceManager.ConnectAllAsync().Wait());
+            await _deviceManager.ConnectAllAsync();
 
             UpdateStatusBar();
             _statusBar.Text = $"就绪 - {devices.Count} 台设备";
@@ -116,7 +114,6 @@ public partial class MainForm : Form
     private async void OnMonitorTick(object? sender, EventArgs e)
     {
         _monitorTimer?.Stop();
-
         try
         {
             await SyncConfigurationAsync();
@@ -226,6 +223,7 @@ public partial class MainForm : Form
     {
         var card = new DeviceInfo(config, _deviceManager, _contentPanel);
         card.ReturnedToMainForm += OnCardReturned;
+        card.StatusChanged += OnCardStatusChanged;
 
         _deviceCards[config.DeviceId] = card;
         _contentPanel!.Controls.Add(card);
@@ -242,6 +240,7 @@ public partial class MainForm : Form
         {
             _ = _deviceManager.DisconnectDeviceAsync(deviceId);
             card.ReturnedToMainForm -= OnCardReturned;
+            card.StatusChanged -= OnCardStatusChanged;
             _contentPanel!.Controls.Remove(card);
             card.Dispose();
             _deviceCards.Remove(deviceId);
@@ -255,6 +254,7 @@ public partial class MainForm : Form
         foreach (var card in _deviceCards.Values)
         {
             card.ReturnedToMainForm -= OnCardReturned;
+            card.StatusChanged -= OnCardStatusChanged;
             _contentPanel!.Controls.Remove(card);
             card.Dispose();
         }
@@ -268,6 +268,17 @@ public partial class MainForm : Form
         _contentPanel.Controls.Add(card);
         card.Show();
         ArrangeCards();
+        UpdateStatusBar();
+    }
+
+    private void OnCardStatusChanged(object? sender, EventArgs e)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnCardStatusChanged(sender, e));
+            return;
+        }
+
         UpdateStatusBar();
     }
 
@@ -308,62 +319,6 @@ public partial class MainForm : Form
     #endregion
 
     #region 事件处理
-
-    private void SubscribeToEvents()
-    {
-        _deviceManager.ConnectionStatusChanged += OnConnectionStatusChanged;
-        _deviceManager.DataValueChanged += OnDataValueChanged;
-    }
-
-    private void OnConnectionStatusChanged(object? sender, ConnectionStatusChangedEventArgs e)
-    {
-        if (InvokeRequired)
-        {
-            BeginInvoke(() => OnConnectionStatusChanged(sender, e));
-            return;
-        }
-
-        if (_deviceCards.TryGetValue(e.ConnectionId, out var card))
-        {
-            card.UpdateStatus(e.IsConnected);
-            UpdateStatusBar();
-        }
-    }
-
-    private void OnDataValueChanged(object? sender, DataValueChangedEventArgs e)
-    {
-        if (InvokeRequired)
-        {
-            BeginInvoke(() => OnDataValueChanged(sender, e));
-            return;
-        }
-
-        if (_deviceCards.TryGetValue(e.ConnectionId, out var card))
-        {
-            var valueStr = FormatValue(e.Value?.Value);
-            var quality = e.Value?.Quality.ToString() ?? "Unknown";
-            var time = e.Value?.Timestamp.ToString("HH:mm:ss.fff") ?? "N/A";
-            card.AddLogInfo($"数据更新 - {e.NodeId}: {valueStr} | 质量: {quality} | 时间: {time}");
-        }
-    }
-
-    private string FormatValue(object? value)
-    {
-        if (value == null) return "null";
-
-        return value switch
-        {
-            bool[] arr => $"[{string.Join(", ", arr)}]",
-            ushort[] arr => $"[{string.Join(", ", arr)}]",
-            int[] arr => $"[{string.Join(", ", arr)}]",
-            float[] arr => $"[{string.Join(", ", arr)}]",
-            double[] arr => $"[{string.Join(", ", arr)}]",
-            byte[] arr => $"[Byte[{arr.Length}]]",
-            Array arr => $"[{string.Join(", ", arr.Cast<object>().Select(o => o?.ToString() ?? "null"))}]",
-            _ => value.ToString() ?? "null"
-        };
-    }
-
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (e.CloseReason != CloseReason.UserClosing)
@@ -434,7 +389,7 @@ public partial class MainForm : Form
     private async void OnRefresh(object? sender, EventArgs e)
     {
         _statusBar!.Text = "正在重新加载...";
-        _deviceManager.ReloadConfiguration(string.Empty);
+        await _deviceManager.ReloadConfigurationAsync(string.Empty);
         await LoadDevicesAsync();
     }
 

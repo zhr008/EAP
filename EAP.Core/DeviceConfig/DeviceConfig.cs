@@ -38,6 +38,15 @@ public class DeviceConfig
     [XmlElement("UpdateRate")]
     public int UpdateRate { get; set; } = 1000;
 
+    [XmlElement("HeartbeatInterval")]
+    public int HeartbeatInterval { get; set; } = 3000;
+
+    [XmlElement("HeartbeatTimeout")]
+    public int HeartbeatTimeout { get; set; } = 5000;
+
+    [XmlElement("HeartbeatFailuresBeforeDisconnect")]
+    public int HeartbeatFailuresBeforeDisconnect { get; set; } = 3;
+
     [XmlElement("Description")]
     public string? Description { get; set; }
 
@@ -254,4 +263,7 @@ public class TagConfig
 
     [XmlElement("ScanRate")]
     public int ScanRate { get; set; } = 1000;
+
+    [XmlElement("IsHeartbeatTag")]
+    public bool IsHeartbeatTag { get; set; } = false;
 }

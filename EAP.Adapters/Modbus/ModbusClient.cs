@@ -67,6 +67,7 @@ public class ModbusClient : ProtocolClientBase
                 UpdateHeartbeatStatus(true);
 
                 StartPolling();
+                StartHeartbeat();
                 return true;
             }
             catch (Exception ex)
@@ -81,7 +82,7 @@ public class ModbusClient : ProtocolClientBase
                 {
                     Logger.Error($"Failed to connect to Modbus server (already disconnected): {ex.Message}", ex);
                 }
-                CleanupAsync().Wait();
+                await CleanupAsync().ConfigureAwait(false);
                 return false;
             }
         }
@@ -97,7 +98,9 @@ public class ModbusClient : ProtocolClientBase
         try
         {
             StopPolling();
+            StopHeartbeat();
             await WaitForPollingToStopAsync().ConfigureAwait(false);
+            await WaitForHeartbeatToStopAsync().ConfigureAwait(false);
 
             await CleanupAsync().ConfigureAwait(false);
             _isConnected = false;
@@ -126,6 +129,16 @@ public class ModbusClient : ProtocolClientBase
         else
             (_transport as IDisposable)?.Dispose();
 
+        _tcpClient?.Dispose();
+        _client = null;
+        _transport = null;
+        _tcpClient = null;
+    }
+
+    private void Cleanup()
+    {
+        (_client as IDisposable)?.Dispose();
+        (_transport as IDisposable)?.Dispose();
         _tcpClient?.Dispose();
         _client = null;
         _transport = null;
@@ -320,7 +333,7 @@ public class ModbusClient : ProtocolClientBase
     {
         base.Dispose();
         _connectLock.Dispose();
-        CleanupAsync().Wait();
+        Cleanup();
     }
 
     private enum ModbusRegisterType

@@ -30,12 +30,21 @@ public abstract class ProtocolClientBase : IProtocolClient
     protected readonly DeviceConfig _deviceConfig;
     protected bool _heartbeatStatus = false;
     protected DateTime _lastHeartbeatTime = DateTime.MinValue;
-    protected readonly TimeSpan _heartbeatTimeout = TimeSpan.FromSeconds(10);
+    protected int _consecutiveHeartbeatFailures = 0;
+    protected readonly TimeSpan _heartbeatTimeout;
+    protected readonly int _heartbeatFailuresBeforeDisconnect;
+
+    protected bool _lastReportedConnected = false;
+    protected readonly object _statusLock = new();
 
     protected readonly ConcurrentDictionary<string, int> _subscribedTags = new();
     protected Task? _pollingTask;
     protected CancellationTokenSource? _pollingCts;
     protected readonly ConcurrentDictionary<string, object> _tagValues = new();
+
+    protected Task? _heartbeatTask;
+    protected CancellationTokenSource? _heartbeatCts;
+    protected string? _heartbeatTagNodeId;
 
     public abstract ProtocolType ProtocolType { get; }
     public string ConnectionId => _deviceConfig.DeviceId;
@@ -49,6 +58,14 @@ public abstract class ProtocolClientBase : IProtocolClient
     protected ProtocolClientBase(DeviceConfig deviceConfig)
     {
         _deviceConfig = deviceConfig ?? throw new ArgumentNullException(nameof(deviceConfig));
+        _heartbeatTimeout = TimeSpan.FromMilliseconds(deviceConfig.HeartbeatTimeout);
+        _heartbeatFailuresBeforeDisconnect = deviceConfig.HeartbeatFailuresBeforeDisconnect;
+
+        var heartbeatTag = deviceConfig.Tags.FirstOrDefault(t => t.IsHeartbeatTag);
+        if (heartbeatTag != null)
+        {
+            _heartbeatTagNodeId = heartbeatTag.NodeId;
+        }
     }
 
     public abstract Task<bool> ConnectAsync(CancellationToken cancellationToken = default);
@@ -68,6 +85,10 @@ public abstract class ProtocolClientBase : IProtocolClient
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// 更新心跳状态
+    /// 心跳正常时调用Pulse，异常时不立即断开，连续N次失败才断开
+    /// </summary>
     protected void UpdateHeartbeatStatus(bool isNormal)
     {
         bool oldStatus = _heartbeatStatus;
@@ -75,13 +96,23 @@ public abstract class ProtocolClientBase : IProtocolClient
         if (isNormal)
         {
             _lastHeartbeatTime = DateTime.Now;
+            _consecutiveHeartbeatFailures = 0;
             _heartbeatStatus = true;
         }
         else
         {
+            _consecutiveHeartbeatFailures++;
+
             if (DateTime.Now - _lastHeartbeatTime > _heartbeatTimeout)
             {
                 _heartbeatStatus = false;
+            }
+
+            if (_heartbeatStatus == false && 
+                _consecutiveHeartbeatFailures >= _heartbeatFailuresBeforeDisconnect && 
+                IsConnected)
+            {
+                OnConnectionStatusChanged(false, $"Heartbeat timeout after {_consecutiveHeartbeatFailures} consecutive failures");
             }
         }
 
@@ -93,16 +124,107 @@ public abstract class ProtocolClientBase : IProtocolClient
                 IsNormal = _heartbeatStatus,
                 Timestamp = DateTime.UtcNow
             });
-            
-            if (!_heartbeatStatus && IsConnected)
+        }
+    }
+
+    /// <summary>
+    /// 启动心跳检测
+    /// 如果配置了独立心跳标签，则定时读取该标签
+    /// 否则依赖业务数据更新心跳
+    /// </summary>
+    protected void StartHeartbeat()
+    {
+        if (_heartbeatTagNodeId == null)
+        {
+            return;
+        }
+
+        _heartbeatCts = new CancellationTokenSource();
+        _heartbeatTask = Task.Run(async () =>
+        {
+            while (!_heartbeatCts.Token.IsCancellationRequested && IsConnected)
             {
-                OnConnectionStatusChanged(false, "Heartbeat timeout");
+                try
+                {
+                    var value = await ReadNodeAsync(_heartbeatTagNodeId!, _heartbeatCts.Token).ConfigureAwait(false);
+                    if (value.Quality == DataQuality.Good)
+                    {
+                        UpdateHeartbeatStatus(true);
+                    }
+                    else
+                    {
+                        UpdateHeartbeatStatus(false);
+                        DeviceLogger.Warn(ConnectionId, $"心跳标签质量不佳: {value.Quality}, NodeId: {_heartbeatTagNodeId}");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (TimeoutException ex)
+                {
+                    UpdateHeartbeatStatus(false);
+                    DeviceLogger.Warn(ConnectionId, $"心跳读取超时: {ex.Message}");
+                }
+                catch (IOException ex)
+                {
+                    UpdateHeartbeatStatus(false);
+                    DeviceLogger.Warn(ConnectionId, $"心跳读取IO异常: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    UpdateHeartbeatStatus(false);
+                    DeviceLogger.Error(ConnectionId, $"心跳读取异常: {ex.Message}", ex);
+                }
+
+                try
+                {
+                    await Task.Delay(_deviceConfig.HeartbeatInterval, _heartbeatCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// 停止心跳检测
+    /// </summary>
+    protected void StopHeartbeat()
+    {
+        _heartbeatCts?.Cancel();
+        _consecutiveHeartbeatFailures = 0;
+    }
+
+    /// <summary>
+    /// 等待心跳任务停止
+    /// </summary>
+    protected async Task WaitForHeartbeatToStopAsync()
+    {
+        if (_heartbeatTask != null)
+        {
+            try
+            {
+                await _heartbeatTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
             }
         }
     }
 
     protected void OnConnectionStatusChanged(bool isConnected, string status, string? errorMessage = null)
     {
+        lock (_statusLock)
+        {
+            if (_lastReportedConnected == isConnected)
+                return;
+
+            _lastReportedConnected = isConnected;
+        }
+
         ConnectionStatusChanged?.Invoke(this, new ConnectionStatusChangedEventArgs
         {
             ConnectionId = ConnectionId,
@@ -121,7 +243,11 @@ public abstract class ProtocolClientBase : IProtocolClient
             NodeId = nodeId,
             Value = value
         });
-        UpdateHeartbeatStatus(true);
+
+        if (_heartbeatTagNodeId == null)
+        {
+            UpdateHeartbeatStatus(true);
+        }
     }
 
     protected void StartPolling()
@@ -141,6 +267,11 @@ public abstract class ProtocolClientBase : IProtocolClient
 
                         var nodeId = tag.Key;
 
+                        if (nodeId == _heartbeatTagNodeId)
+                        {
+                            continue;
+                        }
+
                         try
                         {
                             var value = await ReadNodeAsync(nodeId, _pollingCts.Token).ConfigureAwait(false);
@@ -150,22 +281,43 @@ public abstract class ProtocolClientBase : IProtocolClient
                                 OnDataValueChanged(nodeId, value);
                                 anyReadSuccess = true;
                             }
+                            else if (value.Quality != DataQuality.Good)
+                            {
+                                DeviceLogger.Debug(ConnectionId, $"标签读取质量不佳: {nodeId}, Quality: {value.Quality}");
+                            }
                         }
-                        catch (Exception)
+                        catch (TimeoutException ex)
                         {
+                            DeviceLogger.Debug(ConnectionId, $"标签读取超时: {nodeId}, {ex.Message}");
+                        }
+                        catch (IOException ex)
+                        {
+                            DeviceLogger.Debug(ConnectionId, $"标签读取IO异常: {nodeId}, {ex.Message}");
+                        }
+                        catch (Exception ex)
+                        {
+                            DeviceLogger.Warn(ConnectionId, $"标签读取异常: {nodeId}, {ex.Message}", ex);
                         }
                     }
 
-                    UpdateHeartbeatStatus(anyReadSuccess);
+                    if (_heartbeatTagNodeId == null)
+                    {
+                        UpdateHeartbeatStatus(anyReadSuccess);
+                    }
+
                     await Task.Delay(1000, _pollingCts.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
                     break;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    UpdateHeartbeatStatus(false);
+                    DeviceLogger.Error(ConnectionId, $"轮询循环异常: {ex.Message}", ex);
+                    if (_heartbeatTagNodeId == null)
+                    {
+                        UpdateHeartbeatStatus(false);
+                    }
                 }
             }
         });
@@ -187,6 +339,7 @@ public abstract class ProtocolClientBase : IProtocolClient
     public virtual void Dispose()
     {
         StopPolling();
+        StopHeartbeat();
         _ = DisconnectAsync(CancellationToken.None);
     }
 }

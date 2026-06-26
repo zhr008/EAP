@@ -25,7 +25,7 @@ public interface IDeviceManager
     bool GetDeviceHeartbeatStatus(string deviceId);
     IEnumerable<DeviceConfig> GetDevices();
     IEnumerable<TagConfig> GetTags(string? deviceId = null);
-    void ReloadConfiguration(string configDirectory);
+    Task ReloadConfigurationAsync(string configDirectory);
     
     event EventHandler<ConnectionStatusChangedEventArgs>? ConnectionStatusChanged;
     event EventHandler<DataValueChangedEventArgs>? DataValueChanged;
@@ -409,13 +409,13 @@ public class DeviceManager : IDeviceManager
         return device?.Tags ?? [];
     }
 
-    public void ReloadConfiguration(string configDirectory)
+    public async Task ReloadConfigurationAsync(string configDirectory)
     {
         _logger.Info($"正在从目录重新加载配置：{configDirectory}");
         
         try
         {
-            DisconnectAllAsync().Wait();
+            await DisconnectAllAsync().ConfigureAwait(false);
             
             _clients.Clear();
             
