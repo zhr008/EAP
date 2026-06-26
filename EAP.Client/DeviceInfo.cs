@@ -257,28 +257,8 @@ public partial class DeviceInfo : Form
     private void OnDataValueChanged(object? sender, DataValueChangedEventArgs e)
     {
         if (e.ConnectionId != DeviceConfig.DeviceId) return;
-
-        var valueStr = FormatValue(e.Value?.Value);
-        var quality = e.Value?.Quality.ToString() ?? "Unknown";
-        var time = e.Value?.Timestamp.ToString("HH:mm:ss.fff") ?? "N/A";
-        AddLogInfo($"数据更新 - {e.NodeId}: {valueStr} | 质量: {quality} | 时间: {time}");
-    }
-
-    private string FormatValue(object? value)
-    {
-        if (value == null) return "null";
-
-        return value switch
-        {
-            bool[] arr => $"[{string.Join(", ", arr)}]",
-            ushort[] arr => $"[{string.Join(", ", arr)}]",
-            int[] arr => $"[{string.Join(", ", arr)}]",
-            float[] arr => $"[{string.Join(", ", arr)}]",
-            double[] arr => $"[{string.Join(", ", arr)}]",
-            byte[] arr => $"[Byte[{arr.Length}]]",
-            Array arr => $"[{string.Join(", ", arr.Cast<object>().Select(o => o?.ToString() ?? "null"))}]",
-            _ => value.ToString() ?? "null"
-        };
+        var valueStr = e.Value?.Value?.ToString() ?? "null";
+        AddLogInfo($"数据更新 - {e.NodeId}: {valueStr}");
     }
 
     private void OnHeartbeatStatusChanged(bool isNormal)

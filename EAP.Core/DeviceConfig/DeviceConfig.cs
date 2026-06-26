@@ -127,6 +127,14 @@ public enum HsmsConnectionMode
     Passive
 }
 
+public enum HsmsHeartbeatType
+{
+    LinkTest,
+    S1F1,
+    MessageActivity,
+    None
+}
+
 public class HsmsConfig
 {
     [XmlElement("Host")]
@@ -140,6 +148,12 @@ public class HsmsConfig
 
     [XmlElement("ConnectionMode")]
     public HsmsConnectionMode ConnectionMode { get; set; } = HsmsConnectionMode.Active;
+
+    [XmlElement("HeartbeatType")]
+    public HsmsHeartbeatType HeartbeatType { get; set; } = HsmsHeartbeatType.LinkTest;
+
+    [XmlElement("AutoReplySelect")]
+    public bool AutoReplySelect { get; set; } = true;
 
     [XmlElement("T3Timeout")]
     public int T3Timeout { get; set; } = 45000;
@@ -172,7 +186,7 @@ public class HsmsConfig
     public int LinkTestInterval { get; set; } = 30000;
 
     [XmlElement("DeviceId")]
-    public int DeviceId { get; set; } = 0;
+    public int DeviceId { get; set; } = 1;
 }
 
 public enum ModbusMode

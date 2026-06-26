@@ -239,7 +239,9 @@ public class OpcUaClient : ProtocolClientBase
             var node = new NodeId(nodeId);
             var result = await _session.ReadValueAsync(node, cancellationToken).ConfigureAwait(false);
 
-            return ConvertToDataValue(result);
+            var dataValue = ConvertToDataValue(result);
+            _tagValues[nodeId] = dataValue;
+            return dataValue;
         }
         catch (Exception ex)
         {
@@ -413,12 +415,32 @@ public class OpcUaClient : ProtocolClientBase
             quality = DataQuality.Uncertain;
         }
 
+        var valueStr = FormatValueToString(opcValue.Value);
+
         return new EAP.Core.DataValue
         {
-            Value = opcValue.Value,
+            Value = valueStr,
             Quality = quality,
             Timestamp = opcValue.ServerTimestamp.ToUniversalTime(),
             ErrorMessage = ServiceResult.IsNotGood(opcValue.StatusCode) ? opcValue.StatusCode.ToString() : null
+        };
+    }
+
+    private static string FormatValueToString(object? value)
+    {
+        if (value == null)
+            return "null";
+
+        return value switch
+        {
+            bool[] arr => $"[{string.Join(", ", arr)}]",
+            ushort[] arr => $"[{string.Join(", ", arr)}]",
+            int[] arr => $"[{string.Join(", ", arr)}]",
+            float[] arr => $"[{string.Join(", ", arr)}]",
+            double[] arr => $"[{string.Join(", ", arr)}]",
+            byte[] arr => $"[Byte[{arr.Length}]]",
+            Array arr => $"[{string.Join(", ", arr.Cast<object>().Select(o => o?.ToString() ?? "null"))}]",
+            _ => value.ToString() ?? "null"
         };
     }
 

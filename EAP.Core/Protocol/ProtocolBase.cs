@@ -131,8 +131,9 @@ public abstract class ProtocolClientBase : IProtocolClient
     /// 启动心跳检测
     /// 如果配置了独立心跳标签，则定时读取该标签
     /// 否则依赖业务数据更新心跳
+    /// 子类可以 override 此方法实现协议特定的心跳机制
     /// </summary>
-    protected void StartHeartbeat()
+    protected virtual void StartHeartbeat()
     {
         if (_heartbeatTagNodeId == null)
         {
@@ -191,8 +192,9 @@ public abstract class ProtocolClientBase : IProtocolClient
 
     /// <summary>
     /// 停止心跳检测
+    /// 子类可以 override 此方法实现协议特定的清理逻辑
     /// </summary>
-    protected void StopHeartbeat()
+    protected virtual void StopHeartbeat()
     {
         _heartbeatCts?.Cancel();
         _consecutiveHeartbeatFailures = 0;

@@ -103,10 +103,11 @@ public class OpcDaClient : ProtocolClientBase
             try
             {
                 var nodeId = item.ItemName;
-                _tagValues[nodeId] = item.Value;
+                var valueStr = FormatValueToString(item.Value);
+                _tagValues[nodeId] = valueStr;
                 OnDataValueChanged(nodeId, new DataValue
                 {
-                    Value = item.Value,
+                    Value = valueStr,
                     Quality = DataQuality.Good,
                     Timestamp = DateTime.UtcNow
                 });
@@ -180,9 +181,11 @@ public class OpcDaClient : ProtocolClientBase
                 {
                     if (result.ItemName.Equals(nodeId, StringComparison.OrdinalIgnoreCase))
                     {
+                        var valueStr = FormatValueToString(result.Value);
+                        _tagValues[nodeId] = valueStr;
                         return new EAP.Core.DataValue
                         {
-                            Value = result.Value,
+                            Value = valueStr,
                             Quality = DataQuality.Good,
                             Timestamp = DateTime.UtcNow
                         };
@@ -278,5 +281,23 @@ public class OpcDaClient : ProtocolClientBase
     {
         base.Dispose();
         _connectLock.Dispose();
+    }
+
+    private static string FormatValueToString(object? value)
+    {
+        if (value == null)
+            return "null";
+
+        return value switch
+        {
+            bool[] arr => $"[{string.Join(", ", arr)}]",
+            ushort[] arr => $"[{string.Join(", ", arr)}]",
+            int[] arr => $"[{string.Join(", ", arr)}]",
+            float[] arr => $"[{string.Join(", ", arr)}]",
+            double[] arr => $"[{string.Join(", ", arr)}]",
+            byte[] arr => $"[Byte[{arr.Length}]]",
+            Array arr => $"[{string.Join(", ", arr.Cast<object>().Select(o => o?.ToString() ?? "null"))}]",
+            _ => value.ToString() ?? "null"
+        };
     }
 }
