@@ -1,53 +1,42 @@
 using System;
-using System.Collections.Concurrent;
-using System.IO.Ports;
+using System.Collections.Generic;
+using System.IO;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using EAP.Core.Configuration;
-using EAP.Core.Protocol;
+using EAP.Core;
 using log4net;
+using Microsoft.Extensions.Logging;
+using NModbus;
+using NModbus.Interfaces;
+using NModbus.Transport.IP;
+using NModbus.Transport.IP.ConnectionStrategies;
 
 namespace EAP.Adapters.Modbus;
 
-public class ModbusClient : IProtocolClient
+public class ModbusClient : ProtocolClientBase
 {
     private static readonly ILog Logger = LogManager.GetLogger(typeof(ModbusClient));
-    
-    private readonly DeviceConfig _deviceConfig;
+    private static readonly ILoggerFactory NullLoggerFactory = new LoggerFactory();
+
     private readonly SemaphoreSlim _connectLock = new(1, 1);
-    private object? _modbusClient;
+    private IModbusClient? _client;
+    private IModbusClientTransport? _transport;
     private TcpClient? _tcpClient;
-    private SerialPort? _serialPort;
     private bool _isConnected;
-    private bool _heartbeatStatus = false;
-    private DateTime _lastHeartbeatTime = DateTime.MinValue;
-    private readonly TimeSpan _heartbeatTimeout = TimeSpan.FromSeconds(10);
-    private readonly ConcurrentDictionary<string, object> _tagValues = new();
-    private readonly ConcurrentDictionary<string, int> _subscribedTags = new();
-    private Task? _pollingTask;
-    private CancellationTokenSource? _pollingCts;
 
-    public EAP.Core.Configuration.ProtocolType ProtocolType => EAP.Core.Configuration.ProtocolType.Modbus;
-    public string ConnectionId => _deviceConfig.Id;
-    public bool IsConnected => _isConnected;
-    public bool HeartbeatStatus => _heartbeatStatus;
+    public override EAP.Core.ProtocolType ProtocolType => EAP.Core.ProtocolType.Modbus;
+    public override bool IsConnected => _isConnected;
 
-    public event EventHandler<ConnectionStatusChangedEventArgs>? ConnectionStatusChanged;
-    public event EventHandler<DataValueChangedEventArgs>? DataValueChanged;
-    public event EventHandler<HeartbeatStatusChangedEventArgs>? HeartbeatStatusChanged;
-
-    public ModbusClient(DeviceConfig config)
+    public ModbusClient(DeviceConfig config) : base(config)
     {
-        _deviceConfig = config ?? throw new ArgumentNullException(nameof(config));
         if (config.ModbusConfig == null)
         {
             throw new ArgumentException("Modbus configuration is required", nameof(config));
         }
     }
 
-    public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
+    public override async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
         await _connectLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -59,32 +48,40 @@ public class ModbusClient : IProtocolClient
             }
 
             var config = _deviceConfig.ModbusConfig!;
-            Logger.Info($"Connecting to Modbus device: {config.Mode} mode, Host: {config.Host}, Port: {config.Port}");
+            Logger.Info($"Connecting to Modbus server: {config.Host}:{config.Port}, Slave ID: {config.SlaveId}");
 
             try
             {
-                if (config.Mode == ModbusMode.Tcp)
-                {
-                    await ConnectTcpAsync(config, cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    ConnectSerial(config);
-                }
+                _tcpClient = new TcpClient();
+                await _tcpClient.ConnectAsync(config.Host, config.Port, cancellationToken).ConfigureAwait(false);
+
+                var stream = new TcpClientModbusStream(_tcpClient);
+                var streamFactory = new SingletonStreamFactory(stream);
+                var connectionStrategy = new SingletonStreamConnectionStrategy(streamFactory, NullLoggerFactory);
+                _transport = new ModbusIPClientTransport(connectionStrategy, NullLoggerFactory);
+                _client = new global::NModbus.ModbusClient(_transport, NullLoggerFactory, null!);
 
                 _isConnected = true;
                 Logger.Info($"Modbus client connected successfully: {ConnectionId}");
                 OnConnectionStatusChanged(true, "Connected");
+                UpdateHeartbeatStatus(true);
 
                 StartPolling();
-
                 return true;
             }
             catch (Exception ex)
             {
-                Logger.Error($"Failed to connect to Modbus device: {ex.Message}", ex);
-                OnConnectionStatusChanged(false, "Connection failed", ex.Message);
-                Cleanup();
+                if (_isConnected)
+                {
+                    _isConnected = false;
+                    Logger.Error($"Failed to connect to Modbus server: {ex.Message}", ex);
+                    OnConnectionStatusChanged(false, "Connection failed", ex.Message);
+                }
+                else
+                {
+                    Logger.Error($"Failed to connect to Modbus server (already disconnected): {ex.Message}", ex);
+                }
+                CleanupAsync().Wait();
                 return false;
             }
         }
@@ -94,232 +91,15 @@ public class ModbusClient : IProtocolClient
         }
     }
 
-    private async Task ConnectTcpAsync(ModbusConfig config, CancellationToken cancellationToken)
-    {
-        var factoryType = Type.GetType("NModbus.ModbusFactory, NModbus");
-        if (factoryType == null)
-        {
-            throw new InvalidOperationException("NModbus library not found");
-        }
-
-        var createMethod = factoryType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static);
-        if (createMethod == null)
-        {
-            throw new InvalidOperationException("Cannot find ModbusFactory.Create method");
-        }
-
-        var factory = createMethod.Invoke(null, null);
-        if (factory == null)
-        {
-            throw new InvalidOperationException("Failed to create ModbusFactory instance");
-        }
-
-        var createTcpClientMethod = factory.GetType().GetMethod("CreateTcpClient", new[] { typeof(string), typeof(int) });
-        if (createTcpClientMethod == null)
-        {
-            throw new InvalidOperationException("Cannot find CreateTcpClient method");
-        }
-
-        _modbusClient = createTcpClientMethod.Invoke(factory, new object[] { config.Host, config.Port });
-        if (_modbusClient == null)
-        {
-            throw new InvalidOperationException("Failed to create Modbus TCP client");
-        }
-
-        var connectAsyncMethod = _modbusClient.GetType().GetMethod("ConnectAsync", new[] { typeof(CancellationToken) });
-        if (connectAsyncMethod == null)
-        {
-            throw new InvalidOperationException("Cannot find ConnectAsync method");
-        }
-
-        using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-        {
-            cts.CancelAfter(TimeSpan.FromSeconds(10));
-            await (Task)connectAsyncMethod.Invoke(_modbusClient, new object[] { cts.Token })!;
-        }
-
-        Logger.Info($"Modbus TCP connected to {config.Host}:{config.Port}");
-    }
-
-    private void ConnectSerial(ModbusConfig config)
-    {
-        _serialPort = new SerialPort(config.SerialPort, config.BaudRate)
-        {
-            DataBits = config.DataBits,
-            Parity = GetParity(config.Parity),
-            StopBits = GetStopBits(config.StopBits),
-            ReadTimeout = config.ReadTimeout,
-            WriteTimeout = config.WriteTimeout
-        };
-        _serialPort.Open();
-
-        var factoryType = Type.GetType("NModbus.ModbusFactory, NModbus");
-        if (factoryType == null)
-        {
-            throw new InvalidOperationException("NModbus library not found");
-        }
-
-        var createMethod = factoryType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static);
-        if (createMethod == null)
-        {
-            throw new InvalidOperationException("Cannot find ModbusFactory.Create method");
-        }
-
-        var factory = createMethod.Invoke(null, null);
-        if (factory == null)
-        {
-            throw new InvalidOperationException("Failed to create ModbusFactory instance");
-        }
-
-        MethodInfo createClientMethod;
-        if (config.Mode == ModbusMode.Rtu)
-        {
-            createClientMethod = factory.GetType().GetMethod("CreateRtuClient", new[] { typeof(System.IO.Stream) }) 
-                ?? throw new InvalidOperationException("Cannot find CreateRtuClient method");
-        }
-        else
-        {
-            createClientMethod = factory.GetType().GetMethod("CreateAsciiClient", new[] { typeof(System.IO.Stream) }) 
-                ?? throw new InvalidOperationException("Cannot find CreateAsciiClient method");
-        }
-
-        _modbusClient = createClientMethod.Invoke(factory, new object[] { _serialPort.BaseStream });
-        if (_modbusClient == null)
-        {
-            throw new InvalidOperationException($"Failed to create Modbus {config.Mode} client");
-        }
-
-        var connectMethod = _modbusClient.GetType().GetMethod("Connect", Type.EmptyTypes);
-        if (connectMethod == null)
-        {
-            throw new InvalidOperationException("Cannot find Connect method");
-        }
-
-        connectMethod.Invoke(_modbusClient, null);
-
-        Logger.Info($"Modbus {config.Mode} connected to {config.SerialPort}");
-    }
-
-    private Parity GetParity(string parity)
-    {
-        return parity switch
-        {
-            "Odd" => Parity.Odd,
-            "Even" => Parity.Even,
-            "Mark" => Parity.Mark,
-            "Space" => Parity.Space,
-            _ => Parity.None
-        };
-    }
-
-    private StopBits GetStopBits(int stopBits)
-    {
-        return stopBits switch
-        {
-            2 => StopBits.Two,
-            1 => StopBits.One,
-            _ => StopBits.One
-        };
-    }
-
-    private void StartPolling()
-    {
-        _pollingCts = new CancellationTokenSource();
-        _pollingTask = Task.Run(async () =>
-        {
-            while (!_pollingCts.Token.IsCancellationRequested && IsConnected)
-            {
-                try
-                {
-                    bool anyReadSuccess = false;
-                    
-                    foreach (var tag in _subscribedTags)
-                    {
-                        if (_pollingCts.Token.IsCancellationRequested) break;
-                        
-                        var nodeId = tag.Key;
-                        var updateRate = tag.Value;
-                        
-                        try
-                        {
-                            var value = await ReadNodeAsync(nodeId, _pollingCts.Token).ConfigureAwait(false);
-                            if (value.Quality == DataQuality.Good && value.Value != null)
-                            {
-                                _tagValues[nodeId] = value.Value;
-                                DataValueChanged?.Invoke(this, new DataValueChangedEventArgs
-                                {
-                                    ConnectionId = ConnectionId,
-                                    NodeId = nodeId,
-                                    Value = value
-                                });
-                                anyReadSuccess = true;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Debug($"Error polling tag {nodeId}: {ex.Message}");
-                        }
-                        
-                        await Task.Delay(updateRate, _pollingCts.Token).ConfigureAwait(false);
-                    }
-                    
-                    UpdateHeartbeatStatus(anyReadSuccess);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"Error in polling loop: {ex.Message}", ex);
-                    UpdateHeartbeatStatus(false);
-                }
-            }
-        });
-    }
-    
-    private void UpdateHeartbeatStatus(bool isNormal)
-    {
-        bool oldStatus = _heartbeatStatus;
-        
-        if (isNormal)
-        {
-            _lastHeartbeatTime = DateTime.Now;
-            _heartbeatStatus = true;
-        }
-        else
-        {
-            if (DateTime.Now - _lastHeartbeatTime > _heartbeatTimeout)
-            {
-                _heartbeatStatus = false;
-                Logger.Warn($"Heartbeat timeout for device {ConnectionId}, disconnecting...");
-                _ = DisconnectAsync(CancellationToken.None);
-            }
-        }
-        
-        if (oldStatus != _heartbeatStatus)
-        {
-            HeartbeatStatusChanged?.Invoke(this, new HeartbeatStatusChangedEventArgs
-            {
-                ConnectionId = ConnectionId,
-                IsNormal = _heartbeatStatus,
-                Timestamp = DateTime.UtcNow
-            });
-        }
-    }
-
-    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    public override async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         await _connectLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _pollingCts?.Cancel();
-            if (_pollingTask != null)
-            {
-                await _pollingTask.ConfigureAwait(false);
-            }
+            StopPolling();
+            await WaitForPollingToStopAsync().ConfigureAwait(false);
 
-            Cleanup();
+            await CleanupAsync().ConfigureAwait(false);
             _isConnected = false;
             Logger.Info($"Modbus client disconnected: {ConnectionId}");
             OnConnectionStatusChanged(false, "Disconnected");
@@ -334,99 +114,108 @@ public class ModbusClient : IProtocolClient
         }
     }
 
-    private void Cleanup()
+    private async Task CleanupAsync()
     {
-        if (_modbusClient != null)
-        {
-            var disconnectMethod = _modbusClient.GetType().GetMethod("Disconnect", Type.EmptyTypes);
-            disconnectMethod?.Invoke(_modbusClient, null);
+        if (_client is IAsyncDisposable asyncClient)
+            await asyncClient.DisposeAsync().ConfigureAwait(false);
+        else
+            (_client as IDisposable)?.Dispose();
 
-            if (_modbusClient is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-        }
-        _modbusClient = null;
-        
-        _tcpClient?.Close();
+        if (_transport is IAsyncDisposable asyncTransport)
+            await asyncTransport.DisposeAsync().ConfigureAwait(false);
+        else
+            (_transport as IDisposable)?.Dispose();
+
         _tcpClient?.Dispose();
+        _client = null;
+        _transport = null;
         _tcpClient = null;
-        
-        _serialPort?.Close();
-        _serialPort?.Dispose();
-        _serialPort = null;
-        
-        _pollingTask = null;
-        _pollingCts = null;
     }
 
-    private object? CallModbusMethod(string methodName, params object[] parameters)
+    public override async Task<DataValue> ReadNodeAsync(string nodeId, CancellationToken cancellationToken = default)
     {
-        if (_modbusClient == null)
-            return null;
-
-        var method = _modbusClient.GetType().GetMethod(methodName, parameters.Select(p => p.GetType()).ToArray());
-        if (method != null)
-        {
-            return method.Invoke(_modbusClient, parameters);
-        }
-
-        return null;
-    }
-
-    public async Task<DataValue> ReadNodeAsync(string nodeId, CancellationToken cancellationToken = default)
-    {
-        if (!IsConnected || _modbusClient == null)
+        if (!IsConnected || _client == null)
         {
             Logger.Warn($"Modbus client not connected, cannot read node: {nodeId}");
-            return EAP.Core.Protocol.DataValue.NotConnected();
+            return EAP.Core.DataValue.NotConnected();
         }
 
         try
         {
             Logger.Debug($"Reading Modbus node: {nodeId}");
-            
-            var (address, quantity, functionCode) = ParseNodeId(nodeId);
-            var config = _deviceConfig.ModbusConfig!;
 
-            return await Task.Run(() =>
+            var config = _deviceConfig.ModbusConfig!;
+            var parts = nodeId.Split(':');
+            if (parts.Length >= 2)
             {
-                object? result = null;
-                
-                switch (functionCode)
+                var registerType = ParseRegisterType(parts[0]);
+                if (!ushort.TryParse(parts[1], out ushort address))
                 {
-                    case 1:
-                        result = CallModbusMethod("ReadCoils", config.SlaveId, address, quantity);
-                        break;
-                    case 2:
-                        result = CallModbusMethod("ReadDiscreteInputs", config.SlaveId, address, quantity);
-                        break;
-                    case 3:
-                        result = CallModbusMethod("ReadHoldingRegisters", config.SlaveId, address, quantity);
-                        break;
-                    case 4:
-                        result = CallModbusMethod("ReadInputRegisters", config.SlaveId, address, quantity);
-                        break;
+                    return EAP.Core.DataValue.Bad("Invalid address");
                 }
-                
-                if (result != null)
+
+                ushort count = parts.Length > 2 ? ushort.Parse(parts[2]) : (ushort)1;
+                var slaveAddress = config.SlaveId;
+
+                switch (registerType)
                 {
-                    return CreateDataValue(result);
+                    case ModbusRegisterType.Coil:
+                        var coils = await IModbusClientExtensions.ReadCoilsAsync(_client, slaveAddress, address, count, cancellationToken).ConfigureAwait(false);
+                        return CreateDataValue(coils);
+                    case ModbusRegisterType.DiscreteInput:
+                        var inputs = await IModbusClientExtensions.ReadDiscreteInputsAsync(_client, slaveAddress, address, count, cancellationToken).ConfigureAwait(false);
+                        return CreateDataValue(inputs);
+                    case ModbusRegisterType.InputRegister:
+                        var inputRegs = await IModbusClientExtensions.ReadInputRegistersAsync(_client, slaveAddress, address, count, cancellationToken).ConfigureAwait(false);
+                        return CreateDataValue(inputRegs);
+                    case ModbusRegisterType.HoldingRegister:
+                        var holdingRegs = await IModbusClientExtensions.ReadHoldingRegistersAsync(_client, slaveAddress, address, count, cancellationToken).ConfigureAwait(false);
+                        return CreateDataValue(holdingRegs);
+                    default:
+                        return EAP.Core.DataValue.Bad("Unknown register type");
                 }
-                
-                return EAP.Core.Protocol.DataValue.Bad($"Unsupported function code: {functionCode}");
-            }, cancellationToken).ConfigureAwait(false);
+            }
+
+            return EAP.Core.DataValue.Bad("Invalid node ID format");
         }
         catch (Exception ex)
         {
             Logger.Error($"Error reading Modbus node {nodeId}: {ex.Message}", ex);
-            return EAP.Core.Protocol.DataValue.Bad(ex.Message);
+            
+            // 检查是否是连接断开异常
+            if (IsConnectionLostException(ex))
+            {
+                await HandleConnectionLostAsync().ConfigureAwait(false);
+            }
+            
+            return EAP.Core.DataValue.Bad(ex.Message);
         }
     }
 
-    public async Task<bool> WriteNodeAsync(string nodeId, object value, CancellationToken cancellationToken = default)
+    private bool IsConnectionLostException(Exception ex)
     {
-        if (!IsConnected || _modbusClient == null)
+        // 检查是否是连接断开相关的异常
+        return ex is IOException || 
+               ex is SocketException ||
+               (ex.InnerException != null && IsConnectionLostException(ex.InnerException));
+    }
+
+    private async Task HandleConnectionLostAsync()
+    {
+        if (_isConnected)
+        {
+            _isConnected = false;
+            Logger.Error($"Modbus connection lost: {ConnectionId}");
+            OnConnectionStatusChanged(false, "Connection lost", "Server disconnected");
+            StopPolling();
+            await WaitForPollingToStopAsync().ConfigureAwait(false);
+            await CleanupAsync().ConfigureAwait(false);
+        }
+    }
+
+    public override async Task<bool> WriteNodeAsync(string nodeId, object value, CancellationToken cancellationToken = default)
+    {
+        if (!IsConnected || _client == null)
         {
             Logger.Warn($"Modbus client not connected, cannot write node: {nodeId}");
             return false;
@@ -435,50 +224,42 @@ public class ModbusClient : IProtocolClient
         try
         {
             Logger.Debug($"Writing Modbus node {nodeId} with value: {value}");
-            
-            var (address, _, functionCode) = ParseNodeId(nodeId);
-            var config = _deviceConfig.ModbusConfig!;
 
-            await Task.Run(() =>
+            var config = _deviceConfig.ModbusConfig!;
+            var parts = nodeId.Split(':');
+            if (parts.Length >= 2)
             {
-                switch (functionCode)
+                var registerType = ParseRegisterType(parts[0]);
+                if (!ushort.TryParse(parts[1], out ushort address))
                 {
-                    case 5:
-                        bool coilValue = Convert.ToBoolean(value);
-                        CallModbusMethod("WriteSingleCoil", config.SlaveId, address, coilValue);
+                    Logger.Error("Invalid address");
+                    return false;
+                }
+
+                var slaveAddress = config.SlaveId;
+
+                switch (registerType)
+                {
+                    case ModbusRegisterType.Coil:
+                        bool coilValue = bool.Parse(value.ToString()!);
+                        await IModbusClientExtensions.WriteSingleCoilAsync(_client, slaveAddress, address, coilValue, cancellationToken).ConfigureAwait(false);
                         break;
-                    case 6:
-                        ushort regValue = Convert.ToUInt16(value);
-                        CallModbusMethod("WriteSingleRegister", config.SlaveId, address, regValue);
-                        break;
-                    case 15:
-                        if (value is bool[] coils)
-                        {
-                            CallModbusMethod("WriteMultipleCoils", config.SlaveId, address, coils);
-                        }
-                        else
-                        {
-                            throw new ArgumentException("Value must be bool[] for multiple coils");
-                        }
-                        break;
-                    case 16:
-                        if (value is ushort[] registers)
-                        {
-                            CallModbusMethod("WriteMultipleRegisters", config.SlaveId, address, registers);
-                        }
-                        else
-                        {
-                            throw new ArgumentException("Value must be ushort[] for multiple registers");
-                        }
+                    case ModbusRegisterType.HoldingRegister:
+                        ushort regValue = ushort.Parse(value.ToString()!);
+                        await IModbusClientExtensions.WriteSingleRegisterAsync(_client, slaveAddress, address, regValue, cancellationToken).ConfigureAwait(false);
                         break;
                     default:
-                        throw new NotSupportedException($"Unsupported function code for write: {functionCode}");
+                        Logger.Error("Cannot write to this register type");
+                        return false;
                 }
-            }, cancellationToken).ConfigureAwait(false);
 
-            _tagValues[nodeId] = value;
-            Logger.Info($"Successfully wrote to Modbus node {nodeId}");
-            return true;
+                _tagValues[nodeId] = value;
+                Logger.Info($"Successfully wrote to Modbus node {nodeId}");
+                return true;
+            }
+
+            Logger.Error($"Invalid node ID format: {nodeId}");
+            return false;
         }
         catch (Exception ex)
         {
@@ -487,97 +268,121 @@ public class ModbusClient : IProtocolClient
         }
     }
 
-    private (ushort Address, ushort Quantity, byte FunctionCode) ParseNodeId(string nodeId)
+    private static ModbusRegisterType ParseRegisterType(string typeStr)
     {
-        try
+        return typeStr.ToLower() switch
         {
-            var parts = nodeId.Split(':');
-            if (parts.Length != 2)
-                throw new FormatException("Invalid nodeId format. Expected FCxx:address");
-
-            var fcPart = parts[0].Trim().ToUpper();
-            var addrPart = parts[1].Trim();
-
-            if (!fcPart.StartsWith("FC"))
-                throw new FormatException("NodeId must start with FC");
-
-            if (!int.TryParse(fcPart.Substring(2), out int functionCode))
-                throw new FormatException("Invalid function code");
-
-            ushort quantity = 1;
-            ushort address;
-
-            var addrParts = addrPart.Split(',');
-            if (addrParts.Length == 2)
-            {
-                address = Convert.ToUInt16(addrParts[0].Trim());
-                quantity = Convert.ToUInt16(addrParts[1].Trim());
-            }
-            else
-            {
-                address = Convert.ToUInt16(addrPart);
-            }
-
-            return (address, quantity, (byte)functionCode);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"Error parsing nodeId {nodeId}: {ex.Message}");
-            throw;
-        }
+            "coil" => ModbusRegisterType.Coil,
+            "di" => ModbusRegisterType.DiscreteInput,
+            "ir" => ModbusRegisterType.InputRegister,
+            "hr" => ModbusRegisterType.HoldingRegister,
+            "fc01" => ModbusRegisterType.Coil,
+            "fc02" => ModbusRegisterType.DiscreteInput,
+            "fc03" => ModbusRegisterType.HoldingRegister,
+            "fc04" => ModbusRegisterType.InputRegister,
+            _ => ModbusRegisterType.HoldingRegister
+        };
     }
 
-    private EAP.Core.Protocol.DataValue CreateDataValue(object result)
+    private static DataValue CreateDataValue(bool[] values)
     {
-        if (result is bool[] boolArray)
+        return new EAP.Core.DataValue
         {
-            if (boolArray.Length == 1)
-            {
-                return EAP.Core.Protocol.DataValue.Good(boolArray[0]);
-            }
-            return EAP.Core.Protocol.DataValue.Good(boolArray);
-        }
-        
-        if (result is ushort[] ushortArray)
-        {
-            if (ushortArray.Length == 1)
-            {
-                return EAP.Core.Protocol.DataValue.Good(ushortArray[0]);
-            }
-            return EAP.Core.Protocol.DataValue.Good(ushortArray);
-        }
-        
-        return EAP.Core.Protocol.DataValue.Good(result);
-    }
-
-    public Task SubscribeNodeAsync(string nodeId, int updateRate, CancellationToken cancellationToken = default)
-    {
-        Logger.Debug($"Subscribing to Modbus node: {nodeId} with update rate: {updateRate}ms");
-        _subscribedTags[nodeId] = updateRate;
-        return Task.CompletedTask;
-    }
-
-    public Task UnsubscribeNodeAsync(string nodeId, CancellationToken cancellationToken = default)
-    {
-        Logger.Debug($"Unsubscribing from Modbus node: {nodeId}");
-        _subscribedTags.TryRemove(nodeId, out _);
-        return Task.CompletedTask;
-    }
-
-    private void OnConnectionStatusChanged(bool isConnected, string status, string? errorMessage = null)
-    {
-        ConnectionStatusChanged?.Invoke(this, new ConnectionStatusChangedEventArgs
-        {
-            ConnectionId = ConnectionId,
-            IsConnected = isConnected,
-            Status = status,
-            ErrorMessage = errorMessage,
+            Value = values.Length == 1 ? values[0] : values,
+            Quality = DataQuality.Good,
             Timestamp = DateTime.UtcNow
-        });
+        };
     }
 
-    public void Dispose()
+    private static DataValue CreateDataValue(ushort[] values)
     {
-        _ = DisconnectAsync(CancellationToken.None);
+        return new EAP.Core.DataValue
+        {
+            Value = values.Length == 1 ? values[0] : values,
+            Quality = DataQuality.Good,
+            Timestamp = DateTime.UtcNow
+        };
+    }
+
+    public override Task SubscribeNodeAsync(string nodeId, int updateRate = 1000, CancellationToken cancellationToken = default)
+    {
+        Logger.Info($"Modbus subscription requested for node: {nodeId} (updateRate: {updateRate})");
+        return base.SubscribeNodeAsync(nodeId, updateRate, cancellationToken);
+    }
+
+    public override Task UnsubscribeNodeAsync(string nodeId, CancellationToken cancellationToken = default)
+    {
+        Logger.Info($"Modbus unsubscription requested for node: {nodeId}");
+        return base.UnsubscribeNodeAsync(nodeId, cancellationToken);
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        _connectLock.Dispose();
+        CleanupAsync().Wait();
+    }
+
+    private enum ModbusRegisterType
+    {
+        Coil,
+        DiscreteInput,
+        InputRegister,
+        HoldingRegister
+    }
+
+    private class TcpClientModbusStream : IModbusStream
+    {
+        private readonly TcpClient _tcpClient;
+
+        public TcpClientModbusStream(TcpClient tcpClient)
+        {
+            _tcpClient = tcpClient;
+        }
+
+        public Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _tcpClient.GetStream().ReadAsync(buffer, offset, count, cancellationToken);
+        }
+
+        public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _tcpClient.GetStream().WriteAsync(buffer, offset, count, cancellationToken);
+        }
+
+        public void Dispose()
+        {
+            _tcpClient.GetStream().Dispose();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _tcpClient.GetStream().Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private class SingletonStreamFactory : IStreamFactory
+    {
+        private readonly IModbusStream _stream;
+        private bool _used;
+
+        public SingletonStreamFactory(IModbusStream stream)
+        {
+            _stream = stream;
+        }
+
+        public Task<IModbusStream> CreateStreamAsync(CancellationToken cancellationToken)
+        {
+            if (_used)
+                throw new InvalidOperationException("Stream already created");
+            _used = true;
+            return Task.FromResult(_stream);
+        }
+
+        public Task<IModbusStream> CreateAndConnectAsync(CancellationToken cancellationToken)
+        {
+            return CreateStreamAsync(cancellationToken);
+        }
     }
 }

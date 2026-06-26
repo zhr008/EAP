@@ -2,220 +2,444 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using AntdUI;
-using EAP.Core.Configuration;
-using EAP.Core.Protocol;
+using EAP.Core;
 using EAP.Services;
 
 namespace EAP.Client;
 
+/// <summary>
+/// 设备卡片/明细窗体
+/// 支持两种显示模式：
+/// 1. 卡片模式（嵌入MainForm）
+/// 2. 窗体模式（独立窗口显示详细信息）
+/// </summary>
 public partial class DeviceInfo : Form
 {
-    public DeviceConfig DeviceConfig { get; }
+    #region 公共属性
+
+    public DeviceConfig DeviceConfig { get; set; }
     public bool IsConnected { get; private set; }
     public bool IsInsideMainForm { get; private set; }
-    public bool HeartbeatStatus { get; private set; } // 心跳状态
+    public bool HeartbeatStatus => _heartbeatManager.IsNormal;
 
     public event EventHandler? ReturnedToMainForm;
 
+    #endregion
+
+    #region 私有字段
+
     private readonly IDeviceManager _deviceManager;
     private readonly System.Windows.Forms.Panel? _containerPanel;
+    private readonly HeartbeatManager _heartbeatManager;
+    
     private bool _isDragging;
     private Point _dragStartPoint;
-    
-    // 心跳相关
-    private System.Windows.Forms.Timer? _heartbeatTimer;
-    private bool _heartbeatAnimationState = false;
-    private DateTime _lastHeartbeatTime = DateTime.MinValue;
-    private readonly TimeSpan _heartbeatTimeout = TimeSpan.FromSeconds(10); // 心跳超时时间
+
+    // 状态变更防重复
+    private DateTime _lastStatusChangeTime = DateTime.MinValue;
+    private const int StatusChangeCooldownMs = 500;
+
+    private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(DeviceInfo));
+
+    #endregion
+
+    #region 构造函数
 
     public DeviceInfo(DeviceConfig config, IDeviceManager deviceManager, System.Windows.Forms.Panel? containerPanel = null)
     {
         DeviceConfig = config;
         _deviceManager = deviceManager;
         _containerPanel = containerPanel;
+        IsConnected = _deviceManager.GetConnectedDevices().Contains(DeviceConfig.DeviceId);
+        IsInsideMainForm = true;
 
         InitializeComponent();
 
-        IsConnected = _deviceManager.GetConnectedDevices().Contains(DeviceConfig.Id);
-        IsInsideMainForm = true;
-        HeartbeatStatus = false;
+        // 初始化心跳管理器
+        _heartbeatManager = new HeartbeatManager(
+            timeoutSeconds: 10,
+            intervalMs: 3000,
+            onDrawIcon: DrawHeartbeatIcon,
+            onStatusChanged: OnHeartbeatStatusChanged
+        );
 
-        // 订阅设备连接状态变化事件
-        _deviceManager.ConnectionStatusChanged += DeviceManager_ConnectionStatusChanged;
-        _deviceManager.HeartbeatStatusChanged += DeviceManager_HeartbeatStatusChanged;
-        
-        // 初始化心跳定时器
-        InitializeHeartbeat();
+        // 窗体基础设置
+        TopLevel = false;
+        FormBorderStyle = FormBorderStyle.None;
+        Size = new Size(360, 140);
 
+        // 订阅设备事件
+        _deviceManager.ConnectionStatusChanged += OnConnectionStatusChanged;
+        _deviceManager.HeartbeatStatusChanged += OnHeartbeatStatusEvent;
+
+        // 初始化显示
         LoadDynamicContent();
         UpdateDisplayMode(true);
-    }
 
-    private void DeviceManager_ConnectionStatusChanged(object? sender, ConnectionStatusChangedEventArgs e)
-    {
-        // 只处理当前设备的状态变化
-        if (e.ConnectionId == DeviceConfig.Id)
-        {
-            UpdateStatus(e.IsConnected);
-            // 连接状态变化时更新心跳状态
-            if (e.IsConnected)
-            {
-                UpdateHeartbeat(true);
-            }
-            else
-            {
-                UpdateHeartbeat(false);
-            }
-        }
-    }
-    
-    private void DeviceManager_HeartbeatStatusChanged(object? sender, HeartbeatStatusChangedEventArgs e)
-    {
-        // 只处理当前设备的心跳状态变化
-        if (e.ConnectionId == DeviceConfig.Id)
-        {
-            UpdateHeartbeat(e.IsNormal);
-        }
-    }
-
-    private void InitializeHeartbeat()
-    {
-        _heartbeatTimer = new System.Windows.Forms.Timer();
-        _heartbeatTimer.Interval = 3000; // 3秒跳动一次
-        _heartbeatTimer.Tick += HeartbeatTimer_Tick;
-        
-        // 初始化心跳图标
-        DrawHeartbeatIcon();
-        
-        // 如果设备已连接，启动心跳定时器
+        // 如果已连接，启动心跳
         if (IsConnected)
-        {
-            _heartbeatTimer.Start();
-            _lastHeartbeatTime = DateTime.Now;
-        }
+            _heartbeatManager.Start();
     }
 
-    private void HeartbeatTimer_Tick(object? sender, EventArgs e)
+    #endregion
+
+    #region 公共方法
+
+    /// <summary>
+    /// 更新设备配置
+    /// </summary>
+    public void UpdateConfiguration(DeviceConfig newConfig)
     {
-        if (!IsConnected)
+        if (newConfig == null) return;
+
+        DeviceConfig = newConfig;
+        LoadCardInfo();
+        LoadFullInfo();
+        Logger.Info($"设备配置已更新: {newConfig.DeviceId}");
+    }
+
+    /// <summary>
+    /// 更新连接状态
+    /// </summary>
+    public void UpdateStatus(bool connected)
+    {
+        if (InvokeRequired)
         {
-            _heartbeatTimer?.Stop();
+            BeginInvoke(() => UpdateStatus(connected));
             return;
         }
 
-        // 检查心跳超时
-        if (DateTime.Now - _lastHeartbeatTime > _heartbeatTimeout)
+        // 防重复
+        var now = DateTime.Now;
+        if ((now - _lastStatusChangeTime).TotalMilliseconds < StatusChangeCooldownMs 
+            && IsConnected == connected)
+            return;
+
+        _lastStatusChangeTime = now;
+        IsConnected = connected;
+
+        UpdateStatusUI();
+
+        // 根据连接状态启动/停止心跳
+        if (connected)
+            _heartbeatManager.Start();
+        else
+            _heartbeatManager.Stop();
+    }
+
+    /// <summary>
+    /// 更新心跳状态
+    /// 注意：只要设备已连接，心跳管理器就保持运行，
+    /// 心跳正常时调用 Pulse() 更新时间，心跳异常时通过颜色变化体现
+    /// </summary>
+    public void UpdateHeartbeat(bool isNormal)
+    {
+        if (InvokeRequired)
         {
-            HeartbeatStatus = false;
+            BeginInvoke(() => UpdateHeartbeat(isNormal));
+            return;
         }
 
-        // 切换动画状态
-        _heartbeatAnimationState = !_heartbeatAnimationState;
-        
-        // 更新心跳图标
-        DrawHeartbeatIcon();
-        
-        // 如果心跳正常，更新最后心跳时间
-        if (HeartbeatStatus)
+        // 设备未连接时不处理心跳
+        if (!IsConnected) return;
+
+        if (isNormal)
         {
-            _lastHeartbeatTime = DateTime.Now;
+            // 心跳正常：更新最后心跳时间
+            _heartbeatManager.Pulse();
+        }
+        // 心跳不正常时，不调用 Stop()，让定时器继续运行
+        // 这样心跳图标会持续显示红色（通过 GetStatusColor 方法判断）
+    }
+
+    /// <summary>
+    /// 添加日志信息（同时写入文件和显示到UI）
+    /// </summary>
+    public void AddLogInfo(string message)
+    {
+        AppendLogToUI(message, "INFO");
+        EAP.Core.DeviceLogger.Info(DeviceConfig.DeviceId, message);
+    }
+
+    /// <summary>
+    /// 添加警告日志
+    /// </summary>
+    public void AddLogWarn(string message)
+    {
+        AppendLogToUI(message, "WARN");
+        EAP.Core.DeviceLogger.Warn(DeviceConfig.DeviceId, message);
+    }
+
+    /// <summary>
+    /// 添加错误日志
+    /// </summary>
+    public void AddLogError(string message, Exception? ex = null)
+    {
+        var fullMsg = ex != null ? $"{message}: {ex.Message}" : message;
+        AppendLogToUI(fullMsg, "ERROR");
+        EAP.Core.DeviceLogger.Error(DeviceConfig.DeviceId, message, ex);
+    }
+
+    /// <summary>
+    /// 将日志添加到UI文本框
+    /// </summary>
+    private void AppendLogToUI(string message, string level)
+    {
+        if (_logTextBox == null) return;
+
+        var logLine = $"[{DateTime.Now:HH:mm:ss.fff}] [{level}] {message}";
+
+        if (InvokeRequired)
+            BeginInvoke(() => _logTextBox.AppendText(logLine + "\n"));
+        else
+            _logTextBox.AppendText(logLine + "\n");
+
+        _logTextBox.ScrollToCaret();
+    }
+
+    #endregion
+
+    #region 显示模式切换
+
+    public void UpdateDisplayMode(bool isInside)
+    {
+        IsInsideMainForm = isInside;
+
+        if (isInside)
+        {
+            // 卡片模式
+            TopLevel = false;
+            Size = new Size(360, 140);
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            Text = string.Empty;
+            TopMost = false;
+            _logTextBox.Visible = false;
+            _fullPanel.Visible = false;
+            _statusStrip.Visible = false;
+            _cardPanel.Visible = true;
+        }
+        else
+        {
+            // 窗体模式
+            TopLevel = true;
+            Size = new Size(640, 640);
+            FormBorderStyle = FormBorderStyle.FixedSingle;
+            ShowInTaskbar = true;
+            Text = $"{DeviceConfig.FolderName} ({DeviceConfig.FilePath})";
+            TopMost = true;
+            _logTextBox.Visible = true;
+            _fullPanel.Visible = true;
+            _statusStrip.Visible = true;
+            _cardPanel.Visible = false;
+            StartPosition = FormStartPosition.CenterScreen;
+            CenterToScreen();
         }
     }
 
-    private void DrawHeartbeatIcon()
+    #endregion
+
+    #region 事件处理
+
+    private void OnConnectionStatusChanged(object? sender, ConnectionStatusChangedEventArgs e)
     {
-        if (_heartbeatIcon == null) return;
+        if (e.ConnectionId != DeviceConfig.DeviceId) return;
+        UpdateStatus(e.IsConnected);
+    }
 
-        // 创建位图
-        var bitmap = new Bitmap(12, 12);
-        using (var g = System.Drawing.Graphics.FromImage(bitmap))
+    private void OnHeartbeatStatusEvent(object? sender, HeartbeatStatusChangedEventArgs e)
+    {
+        if (e.ConnectionId != DeviceConfig.DeviceId) return;
+        UpdateHeartbeat(e.IsNormal);
+    }
+
+    private void OnHeartbeatStatusChanged(bool isNormal)
+    {
+        // 心跳状态变化时的额外处理
+    }
+
+    private void OnCardDoubleClick(object? sender, MouseEventArgs e)
+    {
+        if (!IsInsideMainForm) return;
+
+        IsInsideMainForm = false;
+        _containerPanel?.Controls.Remove(this);
+        UpdateDisplayMode(false);
+        Show();
+    }
+
+    private void OnCardMouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left || !IsInsideMainForm) return;
+        _isDragging = true;
+        _dragStartPoint = e.Location;
+        BringToFront();
+    }
+
+    private void OnCardMouseUp(object? sender, MouseEventArgs e)
+    {
+        _isDragging = false;
+    }
+
+    private void OnCardMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_isDragging || !IsInsideMainForm) return;
+
+        var newX = Location.X + e.X - _dragStartPoint.X;
+        var newY = Location.Y + e.Y - _dragStartPoint.Y;
+
+        if (_containerPanel != null)
         {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            
-            // 根据心跳状态和动画状态选择颜色
-            Color color;
-            if (!IsConnected)
-            {
-                color = Color.Gray; // 未连接：灰色
-            }
-            else if (!HeartbeatStatus)
-            {
-                color = Color.Red; // 连接但心跳异常：红色
-            }
-            else
-            {
-                // 心跳正常：绿色和灰色交替
-                color = _heartbeatAnimationState ? Color.Green : Color.FromArgb(128, 128, 128);
-            }
-
-            // 绘制圆形
-            using (var brush = new SolidBrush(color))
-            {
-                g.FillEllipse(brush, 0, 0, 12, 12);
-            }
+            var bounds = _containerPanel.RectangleToScreen(_containerPanel.ClientRectangle);
+            newX = Math.Max(bounds.Left, Math.Min(newX, bounds.Right - Width));
+            newY = Math.Max(bounds.Top, Math.Min(newY, bounds.Bottom - Height - 56));
         }
 
-        _heartbeatIcon.Image = bitmap;
+        Location = new Point(newX, newY);
+    }
+
+    private void OnFormClosing(object? sender, FormClosingEventArgs e)
+    {
+        if (e.CloseReason != CloseReason.UserClosing) return;
+
+        if (!IsInsideMainForm)
+        {
+            e.Cancel = true;
+            ReturnToCardMode();
+        }
+        else
+        {
+            Cleanup();
+        }
+    }
+
+    #endregion
+
+    #region 私有方法
+
+    private void ReturnToCardMode()
+    {
+        IsInsideMainForm = true;
+        UpdateDisplayMode(true);
+        Location = _containerPanel?.PointToScreen(new Point(20, 20)) ?? new Point(20, 20);
+        ReturnedToMainForm?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Cleanup()
+    {
+        _deviceManager.ConnectionStatusChanged -= OnConnectionStatusChanged;
+        _deviceManager.HeartbeatStatusChanged -= OnHeartbeatStatusEvent;
+        _heartbeatManager.Stop();
+        _heartbeatManager.Dispose();
+    }
+
+    private void UpdateStatusUI()
+    {
+        var statusText = IsConnected ? "在线" : "离线";
+        _statusTag.Text = statusText;
+        _statusTag.Type = IsConnected ? TTypeMini.Success : TTypeMini.Error;
+        _statusLabel.Text = $"设备: {DeviceConfig.DeviceName} | 状态: {statusText} | 更新时间: {DateTime.Now:HH:mm:ss}";
+
+        // 更新卡片模式在线状态
+        _onlineStatusCardLabel.Text = statusText;
+        _onlineStatusCardLabel.ForeColor = IsConnected ? Color.Green : Color.Red;
+
+        // 更新明细模式在线状态
+        _onlineStatusFullLabel.Text = statusText;
+        _onlineStatusFullLabel.ForeColor = IsConnected ? Color.Green : Color.Red;
+
+        // 重新绘制心跳图标
+        DrawHeartbeatIcon();
+        AddLogInfo($"设备状态变更: {statusText}");
+    }
+
+    /// <summary>
+    /// 绘制心跳图标（同时更新卡片模式和明细模式的图标）
+    /// </summary>
+    private void DrawHeartbeatIcon()
+    {
+        var bitmap = new Bitmap(12, 12);
+        using (var g = Graphics.FromImage(bitmap))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var brush = new SolidBrush(_heartbeatManager.GetStatusColor(IsConnected));
+            g.FillEllipse(brush, 0, 0, 12, 12);
+        }
+
+        // 更新卡片模式心跳图标
+        if (_heartbeatIconCard != null)
+            _heartbeatIconCard.Image = bitmap;
+
+        // 更新明细模式心跳图标（使用相同图像）
+        if (_heartbeatIconFull != null)
+            _heartbeatIconFull.Image = bitmap;
+    }
+
+    private void SetCellText(int row, int col, string text)
+    {
+        var control = _cardTable.GetControlFromPosition(col, row) as AntdUI.Label;
+        if (control == null) return;
+
+        control.Text = text;
+        control.ForeColor = text switch
+        {
+            "在线" or "心跳正常" => Color.Green,
+            "离线" or "心跳停止" => Color.Red,
+            _ => Color.Black
+        };
     }
 
     private void LoadDynamicContent()
     {
         _statusTag.Text = IsConnected ? "在线" : "离线";
         _statusTag.Type = IsConnected ? TTypeMini.Success : TTypeMini.Error;
-        _statusLabel.Text = $"设备: {DeviceConfig.Name} | 状态: {(IsConnected ? "在线" : "离线")}";
+        _statusLabel.Text = $"设备: {DeviceConfig.DeviceName} | 状态: {(IsConnected ? "在线" : "离线")}";
 
         LoadCardInfo();
         LoadFullInfo();
 
-        AddLog($"日志系统已启动");
-        AddLog($"设备: {DeviceConfig.Name}");
+        AddLogInfo("日志系统已启动");
+        AddLogInfo($"设备: {DeviceConfig.DeviceName}");
     }
 
     private void LoadCardInfo()
     {
-        // 第一行：设备ID、Id、设备名称、Name
         SetCellText(0, 0, "设备ID");
-        SetCellText(0, 1, DeviceConfig.Id);
+        SetCellText(0, 1, DeviceConfig.DeviceId);
         SetCellText(0, 2, "设备名称");
-        SetCellText(0, 3, DeviceConfig.Name);
-
-        // 第二行：启用状态、Enabled、是否在线、动态获取、心跳图标
+        SetCellText(0, 3, DeviceConfig.DeviceName);
         SetCellText(1, 0, "启用状态");
         SetCellText(1, 1, DeviceConfig.Enabled ? "是" : "否");
         SetCellText(1, 2, "是否在线");
-        SetCellText(1, 3, IsConnected ? "在线" : "离线");
-        // 心跳图标在位置 (1,4)，由 _heartbeatIcon 显示
-
-        // 第三行：IP、Host、端口、Port
+        
+        // 更新卡片模式在线状态
+        var cardStatusText = IsConnected ? "在线" : "离线";
+        _onlineStatusCardLabel.Text = cardStatusText;
+        _onlineStatusCardLabel.ForeColor = IsConnected ? Color.Green : Color.Red;
+        
+        // 初始化心跳图标
+        DrawHeartbeatIcon();
+        
         SetCellText(2, 0, "IP");
         SetCellText(2, 1, GetHostText());
         SetCellText(2, 2, "端口");
         SetCellText(2, 3, GetPortText());
     }
 
-    private void SetCellText(int row, int col, string text)
-    {
-        var control = _cardTable.GetControlFromPosition(col, row) as AntdUI.Label;
-        if (control != null)
-        {
-            control.Text = text;
-            // 根据内容设置颜色
-            if (text == "在线" || text == "心跳正常")
-                control.ForeColor = Color.Green;
-            else if (text == "离线" || text == "心跳停止")
-                control.ForeColor = Color.Red;
-            else
-                control.ForeColor = Color.Black;
-        }
-    }
-
     private void LoadFullInfo()
     {
-        _valueId.Text = DeviceConfig.Id;
-        _valueName.Text = DeviceConfig.Name;
+        _valueId.Text = DeviceConfig.DeviceId;
+        _valueName.Text = DeviceConfig.DeviceName;
         _valueEnabled.Text = DeviceConfig.Enabled ? "是" : "否";
-        _valueOnline.Text = IsConnected ? "在线 ✓" : "离线 ✗";
-        _valueOnline.ForeColor = IsConnected ? Color.Green : Color.Red;
+        
+        // 更新明细模式在线状态
+        var fullStatusText = IsConnected ? "在线" : "离线";
+        _onlineStatusFullLabel.Text = fullStatusText;
+        _onlineStatusFullLabel.ForeColor = IsConnected ? Color.Green : Color.Red;
+        
+        // 初始化心跳图标
+        DrawHeartbeatIcon();
+        
         _valueTimeout.Text = $"{DeviceConfig.ConnectionTimeout} ms";
         _valueUpdateRate.Text = $"{DeviceConfig.UpdateRate} ms";
 
@@ -275,6 +499,10 @@ public partial class DeviceInfo : Form
                 _labelRow3Col2.Text = "波特率:";
                 _valueRow3Col2.Text = modbus.BaudRate.ToString();
                 break;
+
+            default:
+                ClearProtocolRows();
+                break;
         }
     }
 
@@ -286,237 +514,21 @@ public partial class DeviceInfo : Form
         _labelRow3Col2.Text = _valueRow3Col2.Text = string.Empty;
     }
 
-    private string GetHostText()
+    private string GetHostText() => DeviceConfig.ProtocolType switch
     {
-        return DeviceConfig.ProtocolType switch
-        {
-            ProtocolType.OpcUa => DeviceConfig.OpcUaConfig?.EndpointUrl ?? "N/A",
-            ProtocolType.OpcDa => DeviceConfig.OpcDaConfig?.ServerProgId ?? "N/A",
-            ProtocolType.Hsms => DeviceConfig.HsmsConfig?.Host ?? "N/A",
-            ProtocolType.Modbus => DeviceConfig.ModbusConfig?.Host ?? "N/A",
-            _ => "N/A"
-        };
-    }
+        ProtocolType.OpcUa => DeviceConfig.OpcUaConfig?.EndpointUrl ?? "N/A",
+        ProtocolType.OpcDa => DeviceConfig.OpcDaConfig?.ServerProgId ?? "N/A",
+        ProtocolType.Hsms => DeviceConfig.HsmsConfig?.Host ?? "N/A",
+        ProtocolType.Modbus => DeviceConfig.ModbusConfig?.Host ?? "N/A",
+        _ => "N/A"
+    };
 
-    private string GetPortText()
+    private string GetPortText() => DeviceConfig.ProtocolType switch
     {
-        return DeviceConfig.ProtocolType switch
-        {
-            ProtocolType.Hsms => DeviceConfig.HsmsConfig?.Port.ToString() ?? "N/A",
-            ProtocolType.Modbus => DeviceConfig.ModbusConfig?.Port.ToString() ?? "N/A",
-            _ => "N/A"
-        };
-    }
-
-    #region 窗体事件
-
-    private void _cardPanel_MouseDoubleClick(object? sender, MouseEventArgs e)
-    {
-        if (IsInsideMainForm)
-        {
-            IsInsideMainForm = false;
-            UpdateDisplayMode(false);
-        }
-    }
-
-    private void _cardPanel_MouseDown(object? sender, MouseEventArgs e)
-    {
-        if (e.Button == MouseButtons.Left && IsInsideMainForm)
-        {
-            _isDragging = true;
-            _dragStartPoint = e.Location;
-            BringToFront();
-        }
-    }
-
-    private void _cardPanel_MouseUp(object? sender, MouseEventArgs e)
-    {
-        _isDragging = false;
-    }
-
-    private void DeviceInfo_MouseMove(object? sender, MouseEventArgs e)
-    {
-        if (_isDragging && IsInsideMainForm)
-        {
-            var newX = Location.X + e.X - _dragStartPoint.X;
-            var newY = Location.Y + e.Y - _dragStartPoint.Y;
-
-            if (_containerPanel != null)
-            {
-                var bounds = _containerPanel.RectangleToScreen(_containerPanel.ClientRectangle);
-                newX = Math.Max(bounds.Left, Math.Min(newX, bounds.Right - Width));
-                newY = Math.Max(bounds.Top, Math.Min(newY, bounds.Bottom - Height - 56));
-            }
-
-            Location = new Point(newX, newY);
-        }
-    }
-
-    private void DeviceInfo_FormClosing(object? sender, FormClosingEventArgs e)
-    {
-        if (e.CloseReason == CloseReason.UserClosing && !IsInsideMainForm)
-        {
-            e.Cancel = true;
-            IsInsideMainForm = true;
-            UpdateDisplayMode(true);
-
-            if (_containerPanel != null)
-                Location = _containerPanel.PointToScreen(new Point(20, 20));
-
-            ReturnedToMainForm?.Invoke(this, EventArgs.Empty);
-        }
-        else if (e.CloseReason == CloseReason.UserClosing && IsInsideMainForm)
-        {
-            // 完全关闭时取消订阅事件
-            _deviceManager.ConnectionStatusChanged -= DeviceManager_ConnectionStatusChanged;
-            _deviceManager.HeartbeatStatusChanged -= DeviceManager_HeartbeatStatusChanged;
-            _heartbeatTimer?.Stop();
-            _heartbeatTimer?.Dispose();
-        }
-    }
+        ProtocolType.Hsms => DeviceConfig.HsmsConfig?.Port.ToString() ?? "N/A",
+        ProtocolType.Modbus => DeviceConfig.ModbusConfig?.Port.ToString() ?? "N/A",
+        _ => "N/A"
+    };
 
     #endregion
-
-    #region 公共方法
-
-    public void UpdateDisplayMode(bool isInside)
-    {
-        IsInsideMainForm = isInside;
-
-        if (isInside)
-        {
-            Size = new Size(360, 180);
-            FormBorderStyle = FormBorderStyle.None;
-            ShowInTaskbar = false;
-            Text = string.Empty;
-            TopMost = false;
-
-            _logTextBox.Visible = false;
-            _fullPanel.Visible = false;
-            _statusStrip.Visible = false;
-            _cardPanel.Visible = true;
-
-            if (_containerPanel != null)
-            {
-                NativeMethods.SetParent(Handle, _containerPanel.Handle);
-                Location = _containerPanel.PointToScreen(new Point(20, 20));
-            }
-        }
-        else
-        {
-            Size = new Size(640, 640);
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            ShowInTaskbar = true;
-            Text = $"{DeviceConfig.FolderName} ({DeviceConfig.FilePath})";
-            TopMost = true;
-
-            _logTextBox.Visible = true;
-            _fullPanel.Visible = true;
-            _statusStrip.Visible = true;
-            _cardPanel.Visible = false;
-
-            NativeMethods.SetParent(Handle, IntPtr.Zero);
-            StartPosition = FormStartPosition.CenterScreen;
-            CenterToScreen();
-        }
-    }
-
-    public void AddLog(string message)
-    {
-        if (_logTextBox != null && !IsInsideMainForm)
-        {
-            _logTextBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}\n");
-            _logTextBox.ScrollToCaret();
-        }
-        
-        Log.Info(DeviceConfig.Id, message);
-    }
-
-    public void AddLogWarn(string message)
-    {
-        if (_logTextBox != null && !IsInsideMainForm)
-        {
-            _logTextBox.AppendText($"[{DateTime.Now:HH:mm:ss}] [WARN] {message}\n");
-            _logTextBox.ScrollToCaret();
-        }
-        
-        Log.Warn(DeviceConfig.Id, message);
-    }
-
-    public void AddLogError(string message, Exception? ex = null)
-    {
-        if (_logTextBox != null && !IsInsideMainForm)
-        {
-            _logTextBox.AppendText($"[{DateTime.Now:HH:mm:ss}] [ERROR] {message}\n");
-            _logTextBox.ScrollToCaret();
-        }
-        
-        Log.Error(DeviceConfig.Id, message, ex);
-    }
-
-    public void UpdateStatus(bool connected)
-    {
-        IsConnected = connected;
-
-        if (InvokeRequired)
-            Invoke(UpdateStatusUI);
-        else
-            UpdateStatusUI();
-    }
-
-    public void UpdateHeartbeat(bool isNormal)
-    {
-        if (InvokeRequired)
-            Invoke(() => UpdateHeartbeatInternal(isNormal));
-        else
-            UpdateHeartbeatInternal(isNormal);
-    }
-
-    private void UpdateHeartbeatInternal(bool isNormal)
-    {
-        HeartbeatStatus = isNormal;
-        if (isNormal)
-        {
-            _lastHeartbeatTime = DateTime.Now;
-            _heartbeatTimer?.Start();
-        }
-        else
-        {
-            _heartbeatTimer?.Stop();
-        }
-        DrawHeartbeatIcon();
-    }
-
-    private void UpdateStatusUI()
-    {
-        // 更新状态标签
-        _statusTag.Text = IsConnected ? "在线" : "离线";
-        _statusTag.Type = IsConnected ? TTypeMini.Success : TTypeMini.Error;
-        _statusLabel.Text = $"设备: {DeviceConfig.Name} | 状态: {(IsConnected ? "在线" : "离线")} | 更新时间: {DateTime.Now:HH:mm:ss}";
-        
-        // 更新卡片信息中的状态
-        SetCellText(1, 3, IsConnected ? "在线" : "离线");
-        
-        // 更新完整信息面板中的状态
-        if (_valueOnline != null)
-        {
-            _valueOnline.Text = IsConnected ? "在线 ✓" : "离线 ✗";
-            _valueOnline.ForeColor = IsConnected ? Color.Green : Color.Red;
-        }
-        
-        // 更新心跳图标
-        DrawHeartbeatIcon();
-        
-        AddLog($"设备状态变更: {(IsConnected ? "在线" : "离线")}");
-    }
-
-    #endregion
-
-    private static class NativeMethods
-    {
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
-    }
-
-
 }

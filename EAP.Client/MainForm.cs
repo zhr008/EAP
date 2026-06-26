@@ -1,197 +1,293 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using AntdUI;
-using EAP.Core.Configuration;
-using EAP.Core.Protocol;
+using EAP.Core;
 using EAP.Services;
 
 namespace EAP.Client;
 
+/// <summary>
+/// 主窗体
+/// 负责设备卡片的加载、布局、监控管理
+/// </summary>
 public partial class MainForm : Form
+{
+    private static readonly log4net.ILog Logger = log4net.LogManager.GetLogger(typeof(MainForm));
+
+    #region 私有字段
+
+    private readonly IDeviceManager _deviceManager;
+    private readonly Dictionary<string, DeviceInfo> _deviceCards = new();
+    private readonly object _deviceLock = new();
+
+    // UI组件
+    private Ribbon? _ribbon;
+    private System.Windows.Forms.Panel? _contentPanel;
+    private System.Windows.Forms.Label? _statusBar;
+    private System.Windows.Forms.Label? _statTotal;
+    private System.Windows.Forms.Label? _statOnline;
+    private System.Windows.Forms.Label? _statOffline;
+
+    // 设备监控定时器
+    private System.Windows.Forms.Timer? _monitorTimer;
+    private const int MonitorIntervalMs = 5000;
+
+    #endregion
+
+    #region 构造函数
+
+    public MainForm(IDeviceManager deviceManager)
     {
-        private readonly IDeviceManager _deviceManager;
-        private readonly Dictionary<string, DeviceInfo> _deviceCards = new();
-        private string _configDirectory;
+        _deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
+        InitializeComponent();
 
-        private Ribbon _ribbon;
-        private System.Windows.Forms.Panel _contentPanel;
-        private System.Windows.Forms.Label _statusBar;
-        private System.Windows.Forms.Label _statTotal;
-        private System.Windows.Forms.Label _statOnline;
-        private System.Windows.Forms.Label _statOffline;
-
-        public MainForm(IDeviceManager deviceManager, string configDirectory)
-        {
-            _deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
-            _configDirectory = configDirectory ?? throw new ArgumentNullException(nameof(configDirectory));
-            InitializeComponent();
-            SubscribeToEvents();
-            InitializeConfigDirectory();
-        }
-
-    private void SubscribeToEvents()
-    {
-        _deviceManager.ConnectionStatusChanged += DeviceManager_ConnectionStatusChanged;
+        SubscribeToEvents();
+        InitializeMonitor();
     }
 
-    private void InitializeConfigDirectory()
-        {
-            _statusBar.Text = $"配置目录: {_configDirectory}";
-            _ = LoadDevicesInfoAsync();
-        }
+    #endregion
 
-    private async Task LoadDevicesInfoAsync()
+    #region 初始化
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        _ = LoadDevicesAsync();
+    }
+
+    /// <summary>
+    /// 加载设备列表
+    /// </summary>
+    private async Task LoadDevicesAsync()
     {
         try
         {
-            _statusBar.Text = "正在加载设备配置...";
+            _statusBar!.Text = "正在加载设备配置...";
 
-            var eapConfig = ConfigurationLoader.LoadConfiguration(_configDirectory);
+            // 获取设备配置
+            var devices = _deviceManager.GetDevices().ToList();
 
-            ClearDeviceCards();
+            // 清除现有卡片
+            ClearAllCards();
 
-            var loadTasks = new List<Task>();
-            
-            foreach (var deviceConfig in eapConfig.Devices)
+            // 创建设备卡片（带延迟避免卡顿）
+            foreach (var config in devices)
             {
-                loadTasks.Add(LoadDeviceCardAsync(deviceConfig));
+                CreateCard(config);
+                await Task.Delay(50);
             }
 
-            await Task.WhenAll(loadTasks).ConfigureAwait(false);
-
-            ArrangeDeviceCards();
+            ArrangeCards();
             UpdateStatusBar();
-            _statusBar.Text = $"就绪 - {eapConfig.Devices.Count} 台设备";
-            
-            Log.Info($"Loaded {eapConfig.Devices.Count} device cards");
+
+            // 连接所有设备
+            _statusBar.Text = $"加载完成 - {devices.Count} 台设备，正在连接...";
+            await Task.Run(() => _deviceManager.ConnectAllAsync().Wait());
+
+            UpdateStatusBar();
+            _statusBar.Text = $"就绪 - {devices.Count} 台设备";
         }
         catch (Exception ex)
         {
-            Log.Error($"加载设备配置失败: {ex.Message}", ex);
-            _statusBar.Text = "加载失败";
+            Logger.Error($"加载设备失败: {ex.Message}", ex);
+            _statusBar!.Text = "加载失败";
         }
     }
 
-    private async Task LoadDeviceCardAsync(DeviceConfig deviceConfig)
+    #endregion
+
+    #region 设备监控
+
+    private void InitializeMonitor()
     {
+        _monitorTimer = new System.Windows.Forms.Timer { Interval = MonitorIntervalMs };
+        _monitorTimer.Tick += OnMonitorTick;
+        _monitorTimer.Start();
+        Logger.Info($"设备监控已启动，间隔: {MonitorIntervalMs}ms");
+    }
+
+    /// <summary>
+    /// 监控定时器触发
+    /// </summary>
+    private async void OnMonitorTick(object? sender, EventArgs e)
+    {
+        _monitorTimer?.Stop();
+
         try
         {
-            var card = new DeviceInfo(deviceConfig, _deviceManager, _contentPanel);
-            card.ReturnedToMainForm += Card_ReturnedToMainForm;
-            
-            _deviceCards[deviceConfig.Id] = card;
-            
-            // 先显示卡片，再异步连接
-            card.Show();
-            
-            if (deviceConfig.Enabled)
-            {
-                // 后台异步连接，不阻塞UI
-                _ = ConnectDeviceAsyncWithRetry(deviceConfig.Id);
-            }
-
-            Log.Info($"Device card loaded: {deviceConfig.Id}");
+            await SyncConfigurationAsync();
+            await SyncConnectionStatusAsync();
         }
         catch (Exception ex)
         {
-            Log.Error($"Failed to load device card {deviceConfig.Id}: {ex.Message}", ex);
+            Logger.Error($"设备监控异常: {ex.Message}", ex);
         }
-    }
-
-    private async Task ConnectDeviceAsyncWithRetry(string deviceId)
-    {
-        const int maxRetries = 3;
-        const int retryDelayMs = 2000;
-        
-        Log.Info($"Starting connection for device: {deviceId}");
-        
-        for (int retry = 0; retry < maxRetries; retry++)
+        finally
         {
-            try
-            {
-                Log.Info($"Attempt {retry + 1} to connect device: {deviceId}");
-                bool success = await _deviceManager.ConnectDeviceAsync(deviceId).ConfigureAwait(false);
-                
-                if (success)
-                {
-                    Log.Info($"Device {deviceId} connected successfully");
-                    return;
-                }
-                else
-                {
-                    Log.Warn($"Device {deviceId} connection attempt {retry + 1} returned false (no exception)");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Device {deviceId} connection attempt {retry + 1} failed: {ex.Message}", ex);
-                Log.Error($"Exception type: {ex.GetType().FullName}");
-                if (ex.InnerException != null)
-                {
-                    Log.Error($"Inner exception: {ex.InnerException.Message}");
-                }
-            }
-            
-            if (retry < maxRetries - 1)
-            {
-                Log.Info($"Waiting {retryDelayMs}ms before retry for device: {deviceId}");
-                await Task.Delay(retryDelayMs).ConfigureAwait(false);
-            }
+            _monitorTimer?.Start();
         }
-        
-        Log.Error($"Device {deviceId} failed to connect after {maxRetries} attempts");
     }
 
-    private void ClearDeviceCards()
+    /// <summary>
+    /// 同步配置变化
+    /// </summary>
+    private async Task SyncConfigurationAsync()
+    {
+        lock (_deviceLock)
+        {
+            // 刷新配置
+            ConfigurationLoader.Refresh();
+            var currentDevices = _deviceManager.GetDevices().ToList();
+            var currentIds = currentDevices.Select(d => d.DeviceId).ToHashSet();
+            var existingIds = _deviceCards.Keys.ToHashSet();
+
+            // 新增设备
+            foreach (var id in currentIds.Except(existingIds))
+            {
+                var config = currentDevices.FirstOrDefault(d => d.DeviceId == id);
+                if (config != null)
+                {
+                    Logger.Info($"检测到新增设备: {id}");
+                    CreateCard(config);
+                }
+            }
+
+            // 删除设备
+            foreach (var id in existingIds.Except(currentIds))
+            {
+                Logger.Info($"检测到删除设备: {id}");
+                RemoveCard(id);
+            }
+
+            // 更新现有设备配置
+            foreach (var config in currentDevices.Where(c => _deviceCards.ContainsKey(c.DeviceId)))
+            {
+                _deviceCards[config.DeviceId].UpdateConfiguration(config);
+            }
+
+            if (existingIds.Except(currentIds).Any() || currentIds.Except(existingIds).Any())
+            {
+                ArrangeCards();
+                UpdateStatusBar();
+            }
+        }
+
+        await Task.Delay(100);
+    }
+
+    /// <summary>
+    /// 同步连接状态
+    /// 根据配置控制设备连接
+    /// </summary>
+    private async Task SyncConnectionStatusAsync()
+    {
+        foreach (var config in _deviceManager.GetDevices())
+        {
+            var id = config.DeviceId;
+            var enabled = config.Enabled;
+            var connected = _deviceManager.IsDeviceConnected(id);
+            var heartbeat = _deviceManager.GetDeviceHeartbeatStatus(id);
+
+            // 连接控制规则
+            if (!enabled && connected)
+            {
+                // 规则1: 已禁用 → 断开
+                Logger.Info($"设备已禁用，断开: {id}");
+                await _deviceManager.DisconnectDeviceAsync(id);
+            }
+            else if (enabled && !connected)
+            {
+                // 规则2: 已启用但未连接 → 连接
+                Logger.Info($"设备已启用，连接: {id}");
+                await _deviceManager.ConnectDeviceAsync(id);
+            }
+            else if (enabled && connected && !heartbeat)
+            {
+                // 规则3: 心跳异常 → 重连
+                Logger.Warn($"设备心跳异常，重连: {id}");
+                await _deviceManager.DisconnectDeviceAsync(id);
+                await Task.Delay(1000);
+                await _deviceManager.ConnectDeviceAsync(id);
+            }
+
+            await Task.Delay(50);
+        }
+    }
+
+    #endregion
+
+    #region 设备卡片管理
+
+    private void CreateCard(DeviceConfig config)
+    {
+        var card = new DeviceInfo(config, _deviceManager, _contentPanel);
+        card.ReturnedToMainForm += OnCardReturned;
+
+        _deviceCards[config.DeviceId] = card;
+        _contentPanel!.Controls.Add(card);
+        card.Show();
+
+        Logger.Info($"创建设备卡片: {config.DeviceId}");
+    }
+
+    private void RemoveCard(string deviceId)
+    {
+        if (!_deviceCards.TryGetValue(deviceId, out var card)) return;
+
+        lock (_deviceLock)
+        {
+            _ = _deviceManager.DisconnectDeviceAsync(deviceId);
+            card.ReturnedToMainForm -= OnCardReturned;
+            _contentPanel!.Controls.Remove(card);
+            card.Dispose();
+            _deviceCards.Remove(deviceId);
+        }
+
+        Logger.Info($"移除设备卡片: {deviceId}");
+    }
+
+    private void ClearAllCards()
     {
         foreach (var card in _deviceCards.Values)
         {
-            try
-            {
-                card.ReturnedToMainForm -= Card_ReturnedToMainForm;
-                card.Close();
-                card.Dispose();
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error disposing device card: {ex.Message}", ex);
-            }
+            card.ReturnedToMainForm -= OnCardReturned;
+            _contentPanel!.Controls.Remove(card);
+            card.Dispose();
         }
         _deviceCards.Clear();
     }
 
-    private void Card_ReturnedToMainForm(object? sender, EventArgs e)
+    private void OnCardReturned(object? sender, EventArgs e)
     {
+        if (sender is not DeviceInfo card || _contentPanel!.Controls.Contains(card)) return;
+
+        _contentPanel.Controls.Add(card);
+        card.Show();
+        ArrangeCards();
         UpdateStatusBar();
-        ArrangeDeviceCards();
     }
 
-    private void ArrangeDeviceCards()
+    private void ArrangeCards()
     {
-        if (_deviceCards.Count == 0 || _contentPanel == null)
-            return;
+        if (_deviceCards.Count == 0 || _contentPanel == null) return;
 
-        var padding = 15;
-        var cardWidth = 360;
-        var cardHeight = 180;
-        var columns = Math.Max(1, _contentPanel.ClientSize.Width / (cardWidth + padding));
-        
-        int row = 0, col = 0;
+        const int padding = 15;
+        const int cardWidth = 360;
+        const int cardHeight = 140;
+
+        int col = 0, row = 0;
+        int columns = Math.Max(1, _contentPanel.ClientSize.Width / (cardWidth + padding));
 
         foreach (var card in _deviceCards.Values)
         {
-            var x = padding + col * (cardWidth + padding);
-            var y = padding + row * (cardHeight + padding);
-            
-            // 使用父控件坐标设置卡片位置
-            card.Location = new Point(x, y);
-            
-            col++;
-            if (col >= columns)
+            card.Location = new Point(padding + col * (cardWidth + padding), padding + row * (cardHeight + padding));
+            card.Size = new Size(cardWidth, cardHeight);
+
+            if (++col >= columns)
             {
                 col = 0;
                 row++;
@@ -204,13 +300,29 @@ public partial class MainForm : Form
         var total = _deviceCards.Count;
         var online = _deviceCards.Values.Count(c => c.IsConnected);
 
-        _statTotal.Text = $"设备: {total}";
-        _statOnline.Text = $"在线: {online}";
-        _statOffline.Text = $"离线: {total - online}";
+        _statTotal!.Text = $"设备: {total}";
+        _statOnline!.Text = $"在线: {online}";
+        _statOffline!.Text = $"离线: {total - online}";
     }
 
-    private void DeviceManager_ConnectionStatusChanged(object? sender, ConnectionStatusChangedEventArgs e)
+    #endregion
+
+    #region 事件处理
+
+    private void SubscribeToEvents()
     {
+        _deviceManager.ConnectionStatusChanged += OnConnectionStatusChanged;
+        _deviceManager.DataValueChanged += OnDataValueChanged;
+    }
+
+    private void OnConnectionStatusChanged(object? sender, ConnectionStatusChangedEventArgs e)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnConnectionStatusChanged(sender, e));
+            return;
+        }
+
         if (_deviceCards.TryGetValue(e.ConnectionId, out var card))
         {
             card.UpdateStatus(e.IsConnected);
@@ -218,109 +330,122 @@ public partial class MainForm : Form
         }
     }
 
-    protected override void OnFormClosing(FormClosingEventArgs e)
+    private void OnDataValueChanged(object? sender, DataValueChangedEventArgs e)
     {
-        base.OnFormClosing(e);
-        
-        if (e.CloseReason == CloseReason.UserClosing)
+        if (InvokeRequired)
         {
-            // 使用非阻塞方式断开连接，避免UI线程死锁
-            _ = DisconnectAndCleanupAsync();
+            BeginInvoke(() => OnDataValueChanged(sender, e));
+            return;
+        }
+
+        if (_deviceCards.TryGetValue(e.ConnectionId, out var card))
+        {
+            var valueStr = FormatValue(e.Value?.Value);
+            var quality = e.Value?.Quality.ToString() ?? "Unknown";
+            var time = e.Value?.Timestamp.ToString("HH:mm:ss.fff") ?? "N/A";
+            card.AddLogInfo($"数据更新 - {e.NodeId}: {valueStr} | 质量: {quality} | 时间: {time}");
         }
     }
 
-    private async Task DisconnectAndCleanupAsync()
+    private string FormatValue(object? value)
     {
-        try
+        if (value == null) return "null";
+
+        return value switch
         {
-            await _deviceManager.DisconnectAllAsync().WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"Error during shutdown: {ex.Message}", ex);
-        }
-        
-        ClearDeviceCards();
+            bool[] arr => $"[{string.Join(", ", arr)}]",
+            ushort[] arr => $"[{string.Join(", ", arr)}]",
+            int[] arr => $"[{string.Join(", ", arr)}]",
+            float[] arr => $"[{string.Join(", ", arr)}]",
+            double[] arr => $"[{string.Join(", ", arr)}]",
+            byte[] arr => $"[Byte[{arr.Length}]]",
+            Array arr => $"[{string.Join(", ", arr.Cast<object>().Select(o => o?.ToString() ?? "null"))}]",
+            _ => value.ToString() ?? "null"
+        };
     }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason != CloseReason.UserClosing)
+        {
+            base.OnFormClosing(e);
+            return;
+        }
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                await _deviceManager.DisconnectAllAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"关闭时断开连接失败: {ex.Message}", ex);
+            }
+            finally
+            {
+                ClearAllCards();
+            }
+        });
+
+        base.OnFormClosing(e);
+    }
+
+    #endregion
 
     #region 菜单事件
 
-    private void SelectConfigDir_Click(object? sender, EventArgs e)
+    private async void OnConnectAll(object? sender, EventArgs e)
     {
-        using var dialog = new System.Windows.Forms.FolderBrowserDialog();
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-        {
-            _configDirectory = dialog.SelectedPath;
-            ClearDeviceCards();
-            _ = LoadDevicesInfoAsync();
-        }
-    }
+        _statusBar!.Text = "正在连接所有设备...";
 
-    private async void ConnectAllBtn_Click(object? sender, EventArgs e)
-    {
-        _statusBar.Text = "正在连接所有设备...";
-        
-        var connectTasks = new List<Task>();
-        
-        foreach (var card in _deviceCards.Values)
-        {
-            connectTasks.Add(ConnectDeviceWithRetryAsync(card.DeviceConfig.Id));
-        }
-        
-        await Task.WhenAll(connectTasks).ConfigureAwait(false);
-        
+        var tasks = _deviceCards.Values.Select(c => ConnectWithRetryAsync(c.DeviceConfig.DeviceId));
+        await Task.WhenAll(tasks);
+
         UpdateStatusBar();
         _statusBar.Text = "连接完成";
     }
 
-    private async Task ConnectDeviceWithRetryAsync(string deviceId)
+    private async Task ConnectWithRetryAsync(string deviceId, int maxRetries = 3)
     {
-        const int maxRetries = 3;
-        const int retryDelayMs = 2000;
-        
-        for (int retry = 0; retry < maxRetries; retry++)
+        for (int i = 0; i < maxRetries; i++)
         {
             try
             {
-                await _deviceManager.ConnectDeviceAsync(deviceId).ConfigureAwait(false);
-                break;
+                await _deviceManager.ConnectDeviceAsync(deviceId);
+                return;
             }
             catch (Exception ex)
             {
-                Log.Error($"Connection attempt {retry + 1} failed: {ex.Message}");
-                
-                if (retry < maxRetries - 1)
-                {
-                    await Task.Delay(retryDelayMs).ConfigureAwait(false);
-                }
+                Logger.Error($"连接失败 (尝试 {i + 1}): {ex.Message}");
+                if (i < maxRetries - 1) await Task.Delay(2000);
             }
         }
     }
 
-    private async void DisconnectAllBtn_Click(object? sender, EventArgs e)
+    private async void OnDisconnectAll(object? sender, EventArgs e)
     {
-        _statusBar.Text = "正在断开所有设备...";
-        
-        await _deviceManager.DisconnectAllAsync().ConfigureAwait(false);
-        
+        _statusBar!.Text = "正在断开所有设备...";
+        await _deviceManager.DisconnectAllAsync();
         UpdateStatusBar();
         _statusBar.Text = "断开完成";
     }
 
-    private void RefreshBtn_Click(object? sender, EventArgs e)
+    private async void OnRefresh(object? sender, EventArgs e)
     {
-        ClearDeviceCards();
-        _ = LoadDevicesInfoAsync();
+        _statusBar!.Text = "正在重新加载...";
+        _deviceManager.ReloadConfiguration(string.Empty);
+        await LoadDevicesAsync();
     }
 
-    private void ToggleDarkMode(object? sender, EventArgs e)
+    private void OnToggleDark(object? sender, EventArgs e)
     {
         Config.IsDark = !Config.IsDark;
     }
 
-    private void ShowAbout(object? sender, EventArgs e)
+    private void OnShowAbout(object? sender, EventArgs e)
     {
-        MessageBox.Show("EAP设备管理系统\n版本 1.0.0\n\n多进程隔离架构", "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show("EAP设备管理系统\n版本 1.0.0", "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     #endregion

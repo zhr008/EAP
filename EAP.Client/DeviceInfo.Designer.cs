@@ -12,24 +12,30 @@ partial class DeviceInfo
     private System.Windows.Forms.Panel _cardPanel;
     private AntdUI.Tag _statusTag;
     private TableLayoutPanel _cardTable;
-    private PictureBox _heartbeatIcon; // 心跳图标
+    private PictureBox _heartbeatIconCard; // 卡片模式心跳图标
+    private PictureBox _heartbeatIconFull; // 明细模式心跳图标
     
-    // _cardTable 单元格控件 (3行5列)
+    // _cardTable 单元格控件 (3行4列)
     private AntdUI.Label _cardCell00;
     private AntdUI.Label _cardCell01;
     private AntdUI.Label _cardCell02;
     private AntdUI.Label _cardCell03;
-    private AntdUI.Label _cardCell04;
     private AntdUI.Label _cardCell10;
     private AntdUI.Label _cardCell11;
     private AntdUI.Label _cardCell12;
     private AntdUI.Label _cardCell13;
-    private AntdUI.Label _cardCell14;
     private AntdUI.Label _cardCell20;
     private AntdUI.Label _cardCell21;
     private AntdUI.Label _cardCell22;
     private AntdUI.Label _cardCell23;
-    private AntdUI.Label _cardCell24;
+    
+    // 在线状态容器（包含文本和心跳图标）
+    private System.Windows.Forms.FlowLayoutPanel _onlineStatusCardPanel; // 卡片模式在线状态容器
+    private System.Windows.Forms.Label _onlineStatusCardLabel; // 卡片模式在线状态文本
+    
+    private System.Windows.Forms.FlowLayoutPanel _onlineStatusFullPanel; // 明细模式在线状态容器
+    private System.Windows.Forms.Label _onlineStatusFullLabel; // 明细模式在线状态文本
+    
     private System.Windows.Forms.Panel _fullPanel;
     private TableLayoutPanel _fullTable;
     private TableLayoutPanel _fullTable1;
@@ -79,24 +85,26 @@ partial class DeviceInfo
     private void InitializeComponent()
     {
         _cardPanel = new System.Windows.Forms.Panel();
-        _statusTag = new Tag();
         _cardTable = new TableLayoutPanel();
-        _heartbeatIcon = new PictureBox(); // 心跳图标
         _cardCell00 = new AntdUI.Label();
         _cardCell01 = new AntdUI.Label();
         _cardCell02 = new AntdUI.Label();
         _cardCell03 = new AntdUI.Label();
-        _cardCell04 = new AntdUI.Label();
         _cardCell10 = new AntdUI.Label();
         _cardCell11 = new AntdUI.Label();
         _cardCell12 = new AntdUI.Label();
-        _cardCell13 = new AntdUI.Label();
-        _cardCell14 = new AntdUI.Label();
+        _onlineStatusCardPanel = new FlowLayoutPanel();
+        _onlineStatusCardLabel = new System.Windows.Forms.Label();
+        _heartbeatIconCard = new PictureBox();
         _cardCell20 = new AntdUI.Label();
         _cardCell21 = new AntdUI.Label();
         _cardCell22 = new AntdUI.Label();
         _cardCell23 = new AntdUI.Label();
-        _cardCell24 = new AntdUI.Label();
+        _cardCell13 = new AntdUI.Label();
+        _statusTag = new Tag();
+        _heartbeatIconFull = new PictureBox();
+        _onlineStatusFullPanel = new FlowLayoutPanel();
+        _onlineStatusFullLabel = new System.Windows.Forms.Label();
         _fullPanel = new System.Windows.Forms.Panel();
         _fullTable = new TableLayoutPanel();
         _fullTable1 = new TableLayoutPanel();
@@ -107,7 +115,6 @@ partial class DeviceInfo
         _labelEnabled = new AntdUI.Label();
         _valueEnabled = new AntdUI.Label();
         _labelOnline = new AntdUI.Label();
-        _valueOnline = new AntdUI.Label();
         _labelTimeout = new AntdUI.Label();
         _valueTimeout = new AntdUI.Label();
         _labelUpdateRate = new AntdUI.Label();
@@ -126,11 +133,16 @@ partial class DeviceInfo
         _valueRow3Col1 = new AntdUI.Label();
         _labelRow3Col2 = new AntdUI.Label();
         _valueRow3Col2 = new AntdUI.Label();
+        _valueOnline = new AntdUI.Label();
         _logTextBox = new RichTextBox();
         _statusStrip = new StatusStrip();
         _statusLabel = new ToolStripStatusLabel();
         _cardPanel.SuspendLayout();
         _cardTable.SuspendLayout();
+        _onlineStatusCardPanel.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)_heartbeatIconCard).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)_heartbeatIconFull).BeginInit();
+        _onlineStatusFullPanel.SuspendLayout();
         _fullPanel.SuspendLayout();
         _fullTable.SuspendLayout();
         _fullTable1.SuspendLayout();
@@ -148,40 +160,29 @@ partial class DeviceInfo
         _cardPanel.Padding = new Padding(16);
         _cardPanel.Size = new Size(624, 601);
         _cardPanel.TabIndex = 2;
-        _cardPanel.MouseDoubleClick += _cardPanel_MouseDoubleClick;
-        _cardPanel.MouseDown += _cardPanel_MouseDown;
-        _cardPanel.MouseUp += _cardPanel_MouseUp;
-        // 
-        // _statusTag
-        // 
-        _statusTag.Location = new Point(280, 16);
-        _statusTag.Name = "_statusTag";
-        _statusTag.Size = new Size(0, 0);
-        _statusTag.TabIndex = 1;
+        _cardPanel.MouseDoubleClick += OnCardDoubleClick;
+        _cardPanel.MouseDown += OnCardMouseDown;
+        _cardPanel.MouseUp += OnCardMouseUp;
         // 
         // _cardTable
         // 
-        _cardTable.ColumnCount = 5;
+        _cardTable.ColumnCount = 4;
         _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60F));
-        _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
-        _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60F));
-        _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
-        _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
+        _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
+        _cardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
         _cardTable.Controls.Add(_cardCell00, 0, 0);
         _cardTable.Controls.Add(_cardCell01, 1, 0);
         _cardTable.Controls.Add(_cardCell02, 2, 0);
         _cardTable.Controls.Add(_cardCell03, 3, 0);
-        _cardTable.Controls.Add(_cardCell04, 4, 0);
         _cardTable.Controls.Add(_cardCell10, 0, 1);
         _cardTable.Controls.Add(_cardCell11, 1, 1);
         _cardTable.Controls.Add(_cardCell12, 2, 1);
-        _cardTable.Controls.Add(_cardCell13, 3, 1);
-        _cardTable.Controls.Add(_heartbeatIcon, 4, 1); // 替换 _cardCell14 为心跳图标
+        _cardTable.Controls.Add(_onlineStatusCardPanel, 3, 1);
         _cardTable.Controls.Add(_cardCell20, 0, 2);
         _cardTable.Controls.Add(_cardCell21, 1, 2);
         _cardTable.Controls.Add(_cardCell22, 2, 2);
         _cardTable.Controls.Add(_cardCell23, 3, 2);
-        _cardTable.Controls.Add(_cardCell24, 4, 2);
         _cardTable.Dock = DockStyle.Fill;
         _cardTable.Location = new Point(16, 16);
         _cardTable.Name = "_cardTable";
@@ -191,7 +192,7 @@ partial class DeviceInfo
         _cardTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
         _cardTable.Size = new Size(592, 569);
         _cardTable.TabIndex = 2;
-        _cardTable.MouseDoubleClick += _cardPanel_MouseDoubleClick;
+        _cardTable.MouseDoubleClick += OnCardDoubleClick;
         // 
         // _cardCell00
         // 
@@ -208,7 +209,7 @@ partial class DeviceInfo
         _cardCell01.Font = new Font("Segoe UI", 8F);
         _cardCell01.Location = new Point(63, 3);
         _cardCell01.Name = "_cardCell01";
-        _cardCell01.Size = new Size(74, 15);
+        _cardCell01.Size = new Size(84, 15);
         _cardCell01.TabIndex = 1;
         _cardCell01.Text = "-";
         // 
@@ -216,7 +217,7 @@ partial class DeviceInfo
         // 
         _cardCell02.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
         _cardCell02.ForeColor = Color.FromArgb(102, 102, 102);
-        _cardCell02.Location = new Point(143, 3);
+        _cardCell02.Location = new Point(294, 3);
         _cardCell02.Name = "_cardCell02";
         _cardCell02.Size = new Size(54, 15);
         _cardCell02.TabIndex = 2;
@@ -225,20 +226,11 @@ partial class DeviceInfo
         // _cardCell03
         // 
         _cardCell03.Font = new Font("Segoe UI", 8F);
-        _cardCell03.Location = new Point(203, 3);
+        _cardCell03.Location = new Point(364, 3);
         _cardCell03.Name = "_cardCell03";
-        _cardCell03.Size = new Size(74, 15);
+        _cardCell03.Size = new Size(84, 15);
         _cardCell03.TabIndex = 3;
         _cardCell03.Text = "-";
-        // 
-        // _cardCell04
-        // 
-        _cardCell04.Font = new Font("Segoe UI", 8F);
-        _cardCell04.Location = new Point(283, 3);
-        _cardCell04.Name = "_cardCell04";
-        _cardCell04.Size = new Size(74, 15);
-        _cardCell04.TabIndex = 4;
-        _cardCell04.Text = "";
         // 
         // _cardCell10
         // 
@@ -255,7 +247,7 @@ partial class DeviceInfo
         _cardCell11.Font = new Font("Segoe UI", 8F);
         _cardCell11.Location = new Point(63, 48);
         _cardCell11.Name = "_cardCell11";
-        _cardCell11.Size = new Size(74, 15);
+        _cardCell11.Size = new Size(84, 15);
         _cardCell11.TabIndex = 6;
         _cardCell11.Text = "-";
         // 
@@ -263,39 +255,43 @@ partial class DeviceInfo
         // 
         _cardCell12.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
         _cardCell12.ForeColor = Color.FromArgb(102, 102, 102);
-        _cardCell12.Location = new Point(143, 48);
+        _cardCell12.Location = new Point(294, 48);
         _cardCell12.Name = "_cardCell12";
         _cardCell12.Size = new Size(54, 15);
         _cardCell12.TabIndex = 7;
         _cardCell12.Text = "是否在线";
         // 
-        // _cardCell13
+        // _onlineStatusCardPanel
         // 
-        _cardCell13.Font = new Font("Segoe UI", 8F);
-        _cardCell13.Location = new Point(203, 48);
-        _cardCell13.Name = "_cardCell13";
-        _cardCell13.Size = new Size(74, 15);
-        _cardCell13.TabIndex = 8;
-        _cardCell13.Text = "-";
+        _onlineStatusCardPanel.Controls.Add(_onlineStatusCardLabel);
+        _onlineStatusCardPanel.Controls.Add(_heartbeatIconCard);
+        _onlineStatusCardPanel.Dock = DockStyle.Top;
+        _onlineStatusCardPanel.Location = new Point(364, 48);
+        _onlineStatusCardPanel.Name = "_onlineStatusCardPanel";
+        _onlineStatusCardPanel.Size = new Size(225, 15);
+        _onlineStatusCardPanel.TabIndex = 0;
+        _onlineStatusCardPanel.WrapContents = false;
         // 
-        // _cardCell14
+        // _onlineStatusCardLabel
         // 
-        _cardCell14.Font = new Font("Segoe UI", 8F);
-        _cardCell14.Location = new Point(283, 48);
-        _cardCell14.Name = "_cardCell14";
-        _cardCell14.Size = new Size(74, 15);
-        _cardCell14.TabIndex = 9;
-        _cardCell14.Text = "";
+        _onlineStatusCardLabel.AutoSize = true;
+        _onlineStatusCardLabel.Font = new Font("Segoe UI", 8F);
+        _onlineStatusCardLabel.Location = new Point(5, 0);
+        _onlineStatusCardLabel.Margin = new Padding(5, 0, 0, 0);
+        _onlineStatusCardLabel.Name = "_onlineStatusCardLabel";
+        _onlineStatusCardLabel.Size = new Size(11, 13);
+        _onlineStatusCardLabel.TabIndex = 8;
+        _onlineStatusCardLabel.Text = "-";
         // 
-        // _heartbeatIcon
+        // _heartbeatIconCard
         // 
-        _heartbeatIcon.BackColor = Color.Transparent;
-        _heartbeatIcon.Location = new Point(283, 48);
-        _heartbeatIcon.Name = "_heartbeatIcon";
-        _heartbeatIcon.Size = new Size(12, 12);
-        _heartbeatIcon.TabIndex = 9;
-        _heartbeatIcon.TabStop = false;
-        _heartbeatIcon.Visible = true;
+        _heartbeatIconCard.BackColor = Color.Transparent;
+        _heartbeatIconCard.Location = new Point(46, 0);
+        _heartbeatIconCard.Margin = new Padding(30, 0, 0, 0);
+        _heartbeatIconCard.Name = "_heartbeatIconCard";
+        _heartbeatIconCard.Size = new Size(12, 12);
+        _heartbeatIconCard.TabIndex = 9;
+        _heartbeatIconCard.TabStop = false;
         // 
         // _cardCell20
         // 
@@ -312,7 +308,7 @@ partial class DeviceInfo
         _cardCell21.Font = new Font("Segoe UI", 8F);
         _cardCell21.Location = new Point(63, 93);
         _cardCell21.Name = "_cardCell21";
-        _cardCell21.Size = new Size(74, 15);
+        _cardCell21.Size = new Size(84, 15);
         _cardCell21.TabIndex = 11;
         _cardCell21.Text = "-";
         // 
@@ -320,7 +316,7 @@ partial class DeviceInfo
         // 
         _cardCell22.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
         _cardCell22.ForeColor = Color.FromArgb(102, 102, 102);
-        _cardCell22.Location = new Point(143, 93);
+        _cardCell22.Location = new Point(294, 93);
         _cardCell22.Name = "_cardCell22";
         _cardCell22.Size = new Size(54, 15);
         _cardCell22.TabIndex = 12;
@@ -329,20 +325,57 @@ partial class DeviceInfo
         // _cardCell23
         // 
         _cardCell23.Font = new Font("Segoe UI", 8F);
-        _cardCell23.Location = new Point(203, 93);
+        _cardCell23.Location = new Point(364, 93);
         _cardCell23.Name = "_cardCell23";
-        _cardCell23.Size = new Size(74, 15);
+        _cardCell23.Size = new Size(84, 15);
         _cardCell23.TabIndex = 13;
         _cardCell23.Text = "-";
         // 
-        // _cardCell24
+        // _cardCell13
         // 
-        _cardCell24.Font = new Font("Segoe UI", 8F);
-        _cardCell24.Location = new Point(283, 93);
-        _cardCell24.Name = "_cardCell24";
-        _cardCell24.Size = new Size(74, 15);
-        _cardCell24.TabIndex = 14;
-        _cardCell24.Text = "";
+        _cardCell13.Location = new Point(0, 0);
+        _cardCell13.Name = "_cardCell13";
+        _cardCell13.Size = new Size(0, 0);
+        _cardCell13.TabIndex = 0;
+        // 
+        // _statusTag
+        // 
+        _statusTag.Location = new Point(280, 16);
+        _statusTag.Name = "_statusTag";
+        _statusTag.Size = new Size(0, 0);
+        _statusTag.TabIndex = 4;
+        // 
+        // _heartbeatIconFull
+        // 
+        _heartbeatIconFull.BackColor = Color.Transparent;
+        _heartbeatIconFull.Location = new Point(46, 5);
+        _heartbeatIconFull.Margin = new Padding(30, 5, 0, 0);
+        _heartbeatIconFull.Name = "_heartbeatIconFull";
+        _heartbeatIconFull.Size = new Size(12, 12);
+        _heartbeatIconFull.TabIndex = 12;
+        _heartbeatIconFull.TabStop = false;
+        // 
+        // _onlineStatusFullPanel
+        // 
+        _onlineStatusFullPanel.Controls.Add(_onlineStatusFullLabel);
+        _onlineStatusFullPanel.Controls.Add(_heartbeatIconFull);
+        _onlineStatusFullPanel.Dock = DockStyle.Fill;
+        _onlineStatusFullPanel.Location = new Point(382, 33);
+        _onlineStatusFullPanel.Name = "_onlineStatusFullPanel";
+        _onlineStatusFullPanel.Size = new Size(213, 24);
+        _onlineStatusFullPanel.TabIndex = 0;
+        _onlineStatusFullPanel.WrapContents = false;
+        // 
+        // _onlineStatusFullLabel
+        // 
+        _onlineStatusFullLabel.AutoSize = true;
+        _onlineStatusFullLabel.Font = new Font("Segoe UI", 9F);
+        _onlineStatusFullLabel.Location = new Point(0, 4);
+        _onlineStatusFullLabel.Margin = new Padding(0, 4, 4, 0);
+        _onlineStatusFullLabel.Name = "_onlineStatusFullLabel";
+        _onlineStatusFullLabel.Size = new Size(12, 15);
+        _onlineStatusFullLabel.TabIndex = 7;
+        _onlineStatusFullLabel.Text = "-";
         // 
         // _fullPanel
         // 
@@ -387,7 +420,7 @@ partial class DeviceInfo
         _fullTable1.Controls.Add(_labelEnabled, 0, 1);
         _fullTable1.Controls.Add(_valueEnabled, 1, 1);
         _fullTable1.Controls.Add(_labelOnline, 2, 1);
-        _fullTable1.Controls.Add(_valueOnline, 3, 1);
+        _fullTable1.Controls.Add(_onlineStatusFullPanel, 3, 1);
         _fullTable1.Controls.Add(_labelTimeout, 0, 2);
         _fullTable1.Controls.Add(_valueTimeout, 1, 2);
         _fullTable1.Controls.Add(_labelUpdateRate, 2, 2);
@@ -399,6 +432,12 @@ partial class DeviceInfo
         _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
         _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
         _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+        _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        _fullTable1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
         _fullTable1.Size = new Size(598, 94);
         _fullTable1.TabIndex = 0;
         // 
@@ -478,17 +517,6 @@ partial class DeviceInfo
         _labelOnline.Size = new Size(53, 16);
         _labelOnline.TabIndex = 6;
         _labelOnline.Text = "是否在线:";
-        // 
-        // _valueOnline
-        // 
-        _valueOnline.AutoSizeMode = TAutoSize.Auto;
-        _valueOnline.Font = new Font("Segoe UI", 9F);
-        _valueOnline.ForeColor = Color.Black;
-        _valueOnline.Location = new Point(382, 33);
-        _valueOnline.Name = "_valueOnline";
-        _valueOnline.Size = new Size(5, 16);
-        _valueOnline.TabIndex = 7;
-        _valueOnline.Text = "-";
         // 
         // _labelTimeout
         // 
@@ -704,6 +732,17 @@ partial class DeviceInfo
         _valueRow3Col2.TabIndex = 11;
         _valueRow3Col2.Text = "-";
         // 
+        // _valueOnline
+        // 
+        _valueOnline.AutoSizeMode = TAutoSize.Auto;
+        _valueOnline.Font = new Font("Segoe UI", 9F);
+        _valueOnline.ForeColor = Color.Black;
+        _valueOnline.Location = new Point(382, 33);
+        _valueOnline.Name = "_valueOnline";
+        _valueOnline.Size = new Size(5, 16);
+        _valueOnline.TabIndex = 7;
+        _valueOnline.Text = "-";
+        // 
         // _logTextBox
         // 
         _logTextBox.BackColor = SystemColors.Window;
@@ -744,16 +783,21 @@ partial class DeviceInfo
         Controls.Add(_cardPanel);
         Controls.Add(_statusStrip);
         Controls.Add(_statusTag);
-        FormBorderStyle = FormBorderStyle.FixedSingle;
+        FormBorderStyle = FormBorderStyle.None;
         MaximizeBox = false;
         MinimizeBox = false;
         Name = "DeviceInfo";
-        StartPosition = FormStartPosition.CenterScreen;
-        TopMost = true;
-        FormClosing += DeviceInfo_FormClosing;
-        MouseMove += DeviceInfo_MouseMove;
+        StartPosition = FormStartPosition.Manual;
+        FormClosing += OnFormClosing;
+        MouseMove += OnCardMouseMove;
         _cardPanel.ResumeLayout(false);
         _cardTable.ResumeLayout(false);
+        _onlineStatusCardPanel.ResumeLayout(false);
+        _onlineStatusCardPanel.PerformLayout();
+        ((System.ComponentModel.ISupportInitialize)_heartbeatIconCard).EndInit();
+        ((System.ComponentModel.ISupportInitialize)_heartbeatIconFull).EndInit();
+        _onlineStatusFullPanel.ResumeLayout(false);
+        _onlineStatusFullPanel.PerformLayout();
         _fullPanel.ResumeLayout(false);
         _fullTable.ResumeLayout(false);
         _fullTable1.ResumeLayout(false);

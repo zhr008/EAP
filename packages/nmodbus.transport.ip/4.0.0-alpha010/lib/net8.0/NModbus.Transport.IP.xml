@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>NModbus.Transport.IP</name>
+    </assembly>
+    <members>
+        <member name="T:NModbus.Transport.IP.BackchannelTcpClientTransport">
+            <summary>
+            This is used to communicate to a connected Modbus TCP client. This is only used internally by a Modbus Server.
+            </summary>
+        </member>
+        <member name="T:NModbus.Transport.IP.ConnectionStrategies.SingletonStreamPerRequestContainer">
+            <summary>
+            Does not dispose the <see cref="T:NModbus.Interfaces.IModbusStream"/> instance.
+            </summary>
+        </member>
+        <member name="T:NModbus.Transport.IP.IConnectionStrategy">
+            <summary>
+            Represents a methodology of creating and or maintaining TCP Client connections.
+            </summary>
+        </member>
+        <member name="M:NModbus.Transport.IP.IConnectionStrategy.GetStreamContainer(System.Threading.CancellationToken)">
+            <summary>
+            Gets an object (that references a TcpClient) that has a lifetime of a single request and optionally a response.
+            </summary>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Transport.IP.IPerRequestStreamContainer">
+            <summary>
+            This container will exist for the lifetime of a single TCP request and optional response.
+            </summary>
+        </member>
+        <member name="P:NModbus.Transport.IP.IPerRequestStreamContainer.Stream">
+            <summary>
+            Gets the underlying stream
+            </summary>
+        </member>
+        <member name="F:NModbus.Transport.IP.Mbap.MbapSerializer.MbapHeaderLength">
+            <summary>
+            The length of a MBAP header.
+            </summary>
+        </member>
+        <member name="T:NModbus.Transport.IP.ModbusIPPorts">
+            <summary>
+            Default ports for Modbus over TCP.
+            </summary>
+        </member>
+        <member name="F:NModbus.Transport.IP.ModbusIPPorts.Insecure">
+            <summary>
+            502: mbap/TCP
+            </summary>
+        </member>
+        <member name="F:NModbus.Transport.IP.ModbusIPPorts.Secure">
+            <summary>
+            802: mbap/TLS/TCP
+            </summary>
+        </member>
+        <member name="T:NModbus.Transport.IP.ModbusServerTcpConnection">
+            <summary>
+            This represents a connection from a client on a server.
+            </summary>
+        </member>
+        <member name="M:NModbus.Transport.IP.ModbusServerTcpConnection.IntializeAsync(System.Threading.CancellationToken)">
+            <summary>
+            Initializes the connection.
+            </summary>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+            <remarks>This is broken out because we can't do async in the constructor, and we want to report errors back to the caller.</remarks>
+        </member>
+        <member name="M:NModbus.Transport.IP.ModbusTcpServerNetworkTransport.#ctor(System.Net.Sockets.TcpListener,NModbus.Interfaces.IModbusServerNetwork,Microsoft.Extensions.Logging.ILoggerFactory,System.Net.Security.SslServerAuthenticationOptions)">
+            <summary>
+            Creates an in stance of <see cref="T:NModbus.Transport.IP.ModbusTcpServerNetworkTransport"/>.
+            </summary>
+            <param name="tcpListener">A configured <see cref="T:System.Net.Sockets.TcpListener"/> that will listen for incoming connections.</param>
+            <param name="serverNetwork">The network of Modbus servers.</param>
+            <param name="loggerFactory"></param>
+            <param name="options">Specify a value to enable Tls (Modbus Security Spec).</param>
+            <exception cref="T:System.ArgumentNullException"></exception>
+        </member>
+        <member name="T:NModbus.Transport.IP.TcpStreamFactory">
+            <summary>
+            Responsible for creating a client.
+            </summary>
+        </member>
+        <member name="M:NModbus.Transport.IP.TcpStreamFactory.#ctor(System.Net.IPEndPoint,System.Action{System.Net.Sockets.TcpClient},System.Net.Security.SslClientAuthenticationOptions)">
+            <summary>
+            Constructor
+            </summary>
+            <param name="endPoint"></param>
+            <param name="tcpClientConfig">Custom configuration action for <see cref="T:System.Net.Sockets.TcpClient"/>.</param>
+            <param name="sslOptions">If non-null, an ssl connection will be created with the specified options.</param>
+            <exception cref="T:System.ArgumentNullException"></exception>
+        </member>
+        <member name="M:NModbus.Transport.IP.TcpStreamFactory.CreateAndConnectAsync(System.Threading.CancellationToken)">
+            <summary>
+            Creates a connection and performs a connection.
+            </summary>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+            <remarks>
+            Optionally creates an <see cref="T:System.Net.Security.SslStream"/> if an <see cref="T:System.Net.Security.SslClientAuthenticationOptions"/> instance is provided in the constructor.
+            </remarks>
+        </member>
+    </members>
+</doc>

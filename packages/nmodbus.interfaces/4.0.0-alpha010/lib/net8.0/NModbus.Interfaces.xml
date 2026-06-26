@@ -1,0 +1,286 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>NModbus.Interfaces</name>
+    </assembly>
+    <members>
+        <member name="T:NModbus.Interfaces.IModbusClient">
+            <summary>
+            Initiates communication and makes requests of server device.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusClient.TryGetClientFunction``2(System.Byte,NModbus.Functions.IClientFunction{``0,``1}@)">
+            <summary>
+            Attempt to retrieve a client function.
+            </summary>
+            <typeparam name="TRequest"></typeparam>
+            <typeparam name="TResponse"></typeparam>
+            <param name="functionCode"></param>
+            <param name="clientFunction"></param>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Interfaces.IModbusClientTransport">
+            <summary>
+            The transport for a Modbus client.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusClientTransport.SendAsync(NModbus.Interfaces.IModbusDataUnit,System.Threading.CancellationToken)">
+            <summary>
+            Send a message but don't want for a response.
+            </summary>
+            <param name="message"></param>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusClientTransport.SendAndReceiveAsync(NModbus.Interfaces.IModbusDataUnit,System.Threading.CancellationToken)">
+            <summary>
+            Send a message and wait for a response.
+            </summary>
+            <param name="message"></param>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Interfaces.IModbusDataUnit">
+            <summary>
+            There isn't a term in the Modbus spec that refers to the combination of a Unit Identifier with a Protocol Data Unit.
+            An Application Data Unit can contain this and more, but is transport implementation specific. Hence - the term "Modbus Data Unit."
+            </summary>
+            <remarks>The term "ModbusMessage" was used initially, but this clashed with the concept of request / response messages.</remarks>
+        </member>
+        <member name="P:NModbus.Interfaces.IModbusDataUnit.ProtocolDataUnit">
+            <summary>
+            The Protocol Data Unit.
+            </summary>
+        </member>
+        <member name="P:NModbus.Interfaces.IModbusDataUnit.UnitIdentifier">
+            <summary>
+            The Unit Identifier.
+            </summary>
+        </member>
+        <member name="T:NModbus.Interfaces.IModbusServer">
+            <summary>
+            Processes requests and return an appropriate response (or error message)
+            </summary>
+        </member>
+        <member name="P:NModbus.Interfaces.IModbusServer.UnitIdentifier">
+            <summary>
+            Gets the unit number for this server device.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusServer.ProcessRequestAsync(NModbus.Interfaces.ProtocolDataUnit,System.Threading.CancellationToken)">
+            <summary>
+            Process the request.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Interfaces.IModbusServerNetwork">
+            <summary>
+            A network of Modbus servers.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusServerNetwork.TryAddServer(NModbus.Interfaces.IModbusServer)">
+            <summary>
+            Attempts to add a server to this network.
+            </summary>
+            <param name="server"></param>
+            <returns>True if the server was added, false otherwise.</returns>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusServerNetwork.TryRemoveServer(System.Byte)">
+            <summary>
+            Attempts to remove the Modbus server from this network.
+            </summary>
+            <param name="unitIdentifier"></param>
+            <returns>True if the server was removed, false otherwise.</returns>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusServerNetwork.ProcessRequestAsync(NModbus.Interfaces.IModbusDataUnit,NModbus.Interfaces.IModbusClientTransport,System.Threading.CancellationToken)">
+            <summary>
+            Processes a request from a Modbus Server network.
+            </summary>
+            <param name="requestMessage"></param>
+            <param name="clientTransport"></param>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Interfaces.IModbusStream">
+            <summary>
+            Represents a stream resource.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusStream.ReadAsync(System.Byte[],System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Reads a number of bytes from the input buffer.
+            </summary>
+            <param name="buffer">The byte array to write the collected data to.</param>
+            <param name="offset">The offset in the buffer array to begin writing.</param>
+            <param name="count">The number of bytes to read.</param>
+            <param name="cancellationToken"></param>
+            <returns>The number of bytes that were actually read.</returns>
+        </member>
+        <member name="M:NModbus.Interfaces.IModbusStream.WriteAsync(System.Byte[],System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Writes the specified number of bytes.
+            </summary>
+            <param name="buffer">Byte array containing the data to write.</param>
+            <param name="offset">The offset at which to begin writing</param>
+            <param name="count">The number of bytes to write.</param>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+        </member>
+        <member name="T:NModbus.Interfaces.IStreamFactory">
+            <summary>
+            Responsible for creating streams.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.IStreamFactory.CreateAndConnectAsync(System.Threading.CancellationToken)">
+            <summary>
+            Create a connection and open that connection.
+            </summary>
+            <param name="cancellationToken"></param>
+            <returns></returns>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.IllegalFunction">
+            <summary>
+            The function code received in the query is not an 
+            allowable action for the server. This may be
+            because the function code is only applicable to
+            newer devices, and was not implemented in the
+            unit selected. It could also indicate that the server
+            is in the wrong state to process a request of this 
+            type, for example because it is unconfigured and 
+            is being asked to return register values.
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.IllegalDataAddress">
+            <summary>
+            The data address received in the query is not an 
+            allowable address for the server. More
+            specifically, the combination of reference number
+            and transfer length is invalid. For a controller with 
+            100 registers, the PDU addresses the first register 
+            as 0, and the last one as 99. If a request is 
+            submitted with a starting register address of 96 
+            and a quantity of registers of 4, then this request
+            will successfully operate (address-wise at least) 
+            on registers 96, 97, 98, 99. If a request is 
+            submitted with a starting register address of 96 
+            and a quantity of registers of 5, then this request
+            will fail with Exception Code 0x02 “Illegal Data
+            Address” since it attempts to operate on registers 
+            96, 97, 98, 99 and 100, and there is no register
+            with address 100.
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.IllegalDataValue">
+            <summary>
+            A value contained in the query data field is not an 
+            allowable value for server. This indicates a fault in 
+            the structure of the remainder of a complex
+            request, such as that the implied length is 
+            incorrect. It specifically does NOT mean that a
+            data item submitted for storage in a register has a
+            value outside the expectation of the application
+            program, since the MODBUS protocol is unaware
+            of the significance of any particular value of any
+            particular register.
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.ServerDeviceFailure">
+            <summary>
+            An unrecoverable error occurred while the server
+            was attempting to perform the requested action.
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.Acknowledge">
+            <summary>
+            Specialized use in conjunction with programming 
+            commands.
+            The server has accepted the request and is 
+            processing it, but a long duration of time will be
+            required to do so. This response is returned to
+            prevent a timeout error from occurring in the
+            client. The client can next issue a Poll Program
+            Complete message to determine if processing is 
+            completed.
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.ServerDeviceBusy">
+            <summary>
+            Specialized use in conjunction with programming 
+            commands.
+            The server is engaged in processing a long–
+            duration program command. The client should
+            retransmit the message later when the server is 
+            free.
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.MemoryParityError">
+            <summary>
+            Specialized use in conjunction with function codes 
+            20 and 21 and reference type 6, to indicate that
+            the extended file area failed to pass a consistency
+            check.
+            The server attempted to read record file, but
+            detected a parity error in the memory. The client
+            can retry the request, but service may be required.
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.GatewayPathUnavailable">
+            <summary>
+            Specialized use in conjunction with gateways, 
+            indicates that the gateway was unable to allocate
+            an internal communication path from the input port
+            to the output port for processing the request.
+            Usually means that the gateway is misconfigured
+            or overloaded
+            </summary>
+        </member>
+        <member name="F:NModbus.Interfaces.ModbusExceptionCode.GatewayTargetDeviceFailedToRespond">
+            <summary>
+            Specialized use in conjunction with gateways, 
+            indicates that no response was obtained from the
+            target device. Usually means that the device is not
+            present on the network.
+            </summary>
+        </member>
+        <member name="T:NModbus.Interfaces.ProtocolDataUnit">
+            <summary>
+            The MODBUS protocol defines a simple protocol data unit (PDU) independent of the 
+            underlying communication layers.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.ProtocolDataUnit.#ctor(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Constructs a <see cref="T:NModbus.Interfaces.ProtocolDataUnit"/> from a raw binary buffer.
+            </summary>
+            <param name="buffer"></param>
+        </member>
+        <member name="M:NModbus.Interfaces.ProtocolDataUnit.#ctor(System.Byte,System.Byte[])">
+            <summary>
+            Constructs a <see cref="T:NModbus.Interfaces.ProtocolDataUnit"/> from a function code and data payload.
+            </summary>
+            <param name="functionCode"></param>
+            <param name="data"></param>
+        </member>
+        <member name="P:NModbus.Interfaces.ProtocolDataUnit.FunctionCode">
+            <summary>
+            The function code.
+            </summary>
+        </member>
+        <member name="P:NModbus.Interfaces.ProtocolDataUnit.Data">
+            <summary>
+            The data part of this <see cref="T:NModbus.Interfaces.ProtocolDataUnit"/>.
+            </summary>
+        </member>
+        <member name="P:NModbus.Interfaces.ProtocolDataUnit.Length">
+            <summary>
+            Gets the full length of this <see cref="T:NModbus.Interfaces.ProtocolDataUnit"/>.
+            </summary>
+        </member>
+        <member name="M:NModbus.Interfaces.ProtocolDataUnit.ToArray">
+            <summary>
+            Gets a byte array representation of the PDU.
+            </summary>
+            <returns></returns>
+        </member>
+    </members>
+</doc>

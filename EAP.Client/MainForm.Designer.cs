@@ -32,24 +32,23 @@ partial class MainForm
 
         var homeTab = new RibbonTabPage("首页",
             new RibbonItemGroup("配置",
-                new RibbonItem("选择配置目录", "FolderOpenOutlined", SelectConfigDir_Click) { Size = RibbonItemSize.Large },
-                new RibbonItem("刷新配置", "SyncOutlined", RefreshBtn_Click) { Size = RibbonItemSize.Large }
+                new RibbonItem("刷新配置", "SyncOutlined", OnRefresh) { Size = RibbonItemSize.Large }
             ),
             new RibbonItemGroup("设备",
-                new RibbonItem("连接全部", "LinkOutlined", ConnectAllBtn_Click) { Size = RibbonItemSize.Large },
-                new RibbonItem("断开全部", "LinkOffOutlined", DisconnectAllBtn_Click) { Size = RibbonItemSize.Large }
+                new RibbonItem("连接全部", "LinkOutlined", OnConnectAll) { Size = RibbonItemSize.Large },
+                new RibbonItem("断开全部", "LinkOffOutlined", OnDisconnectAll) { Size = RibbonItemSize.Large }
             )
         );
 
         var viewTab = new RibbonTabPage("视图",
             new RibbonItemGroup("显示",
-                new RibbonItem("切换主题", "SunOutlined", ToggleDarkMode) { Size = RibbonItemSize.Large }
+                new RibbonItem("切换主题", "SunOutlined", OnToggleDark) { Size = RibbonItemSize.Large }
             )
         );
 
         var helpTab = new RibbonTabPage("帮助",
             new RibbonItemGroup("关于",
-                new RibbonItem("关于", "InfoCircleOutlined", ShowAbout) { Size = RibbonItemSize.Large }
+                new RibbonItem("关于", "InfoCircleOutlined", OnShowAbout) { Size = RibbonItemSize.Large }
             )
         );
 

@@ -2,48 +2,35 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using EAP.Core.Configuration;
-using EAP.Core.Protocol;
+using EAP.Core;
 using log4net;
 using Opc.Ua;
 using Opc.Ua.Client;
 
 namespace EAP.Adapters.OpcUa;
 
-public class OpcUaClient : IProtocolClient
+public class OpcUaClient : ProtocolClientBase
 {
     private static readonly ILog Logger = LogManager.GetLogger(typeof(OpcUaClient));
     
-    private readonly DeviceConfig _deviceConfig;
     private readonly SemaphoreSlim _connectLock = new(1, 1);
     private Session? _session;
     private object? _reconnectHandler;
-    private bool _isConnected;
-    private bool _heartbeatStatus = false;
-    private DateTime _lastHeartbeatTime = DateTime.MinValue;
-    private readonly TimeSpan _heartbeatTimeout = TimeSpan.FromSeconds(10);
     private readonly ConcurrentDictionary<string, MonitoredItem> _monitoredItems = new();
-    private readonly ConcurrentDictionary<string, EAP.Core.Protocol.DataValue> _tagValues = new();
+    private new readonly ConcurrentDictionary<string, EAP.Core.DataValue> _tagValues = new();
 
-    public EAP.Core.Configuration.ProtocolType ProtocolType => EAP.Core.Configuration.ProtocolType.OpcUa;
-    public string ConnectionId => _deviceConfig.Id;
-    public bool IsConnected => _session?.Connected ?? false;
-    public bool HeartbeatStatus => _heartbeatStatus;
+    public override ProtocolType ProtocolType => ProtocolType.OpcUa;
+    public override bool IsConnected => _session?.Connected ?? false;
 
-    public event EventHandler<ConnectionStatusChangedEventArgs>? ConnectionStatusChanged;
-    public event EventHandler<DataValueChangedEventArgs>? DataValueChanged;
-    public event EventHandler<HeartbeatStatusChangedEventArgs>? HeartbeatStatusChanged;
-
-    public OpcUaClient(DeviceConfig config)
+    public OpcUaClient(DeviceConfig config) : base(config)
     {
-        _deviceConfig = config ?? throw new ArgumentNullException(nameof(config));
         if (config.OpcUaConfig == null)
         {
             throw new ArgumentException("OPC UA configuration is required", nameof(config));
         }
     }
 
-    public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
+    public override async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
         await _connectLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -82,7 +69,7 @@ public class OpcUaClient : IProtocolClient
                     }
                 };
 
-                await applicationConfig.Validate(ApplicationType.Client).ConfigureAwait(false);
+                await applicationConfig.ValidateAsync(ApplicationType.Client).ConfigureAwait(false);
 
                 _session = await CreateSessionAsync(applicationConfig, config).ConfigureAwait(false);
 
@@ -95,9 +82,9 @@ public class OpcUaClient : IProtocolClient
                         var reconnectHandlerType = Type.GetType("Opc.Ua.Client.SessionReconnectHandler, OPCFoundation.NetStandard.Opc.Ua");
                         if (reconnectHandlerType != null)
                         {
-                            _reconnectHandler = Activator.CreateInstance(reconnectHandlerType);
+                            _reconnectHandler = Activator.CreateInstance(reconnectHandlerType!)!;
                             var beginReconnectMethod = reconnectHandlerType.GetMethod("BeginReconnect", new[] { typeof(Session), typeof(int), typeof(EventHandler) });
-                            beginReconnectMethod?.Invoke(_reconnectHandler, new object[] { _session, config.ReconnectInterval, null });
+                            beginReconnectMethod?.Invoke(_reconnectHandler, new object[] { _session, config.ReconnectInterval, null! });
                         }
                     }
                     catch (Exception ex)
@@ -108,19 +95,17 @@ public class OpcUaClient : IProtocolClient
 
                 _session.KeepAlive += Session_KeepAlive;
 
-                _isConnected = true;
                 Logger.Info($"OPC UA client connected successfully: {ConnectionId}");
                 OnConnectionStatusChanged(true, "Connected");
 
                 return true;
             }
             catch (Exception ex)
-            {
-                Logger.Error($"Failed to connect to OPC UA server: {ex.Message}", ex);
-                OnConnectionStatusChanged(false, "Connection failed", ex.Message);
-                Cleanup();
-                return false;
-            }
+                {
+                    Logger.Error($"Failed to connect to OPC UA server: {ex.Message}", ex);
+                    OnConnectionStatusChanged(false, "Connection failed", ex.Message);
+                    return false;
+                }
         }
         finally
         {
@@ -167,7 +152,7 @@ public class OpcUaClient : IProtocolClient
                     endpoint, 
                     "EAP Client", 
                     userIdentity, 
-                    null 
+                    null! 
                 });
                 
                 if (task != null)
@@ -188,7 +173,7 @@ public class OpcUaClient : IProtocolClient
         }
     }
 
-    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    public override async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         await _connectLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -221,7 +206,6 @@ public class OpcUaClient : IProtocolClient
                 _session = null;
             }
 
-            _isConnected = false;
             Logger.Info($"OPC UA client disconnected: {ConnectionId}");
             OnConnectionStatusChanged(false, "Disconnected");
         }
@@ -235,25 +219,12 @@ public class OpcUaClient : IProtocolClient
         }
     }
 
-    private void Cleanup()
-    {
-        if (_reconnectHandler != null)
-        {
-            var cancelMethod = _reconnectHandler.GetType().GetMethod("Cancel");
-            cancelMethod?.Invoke(_reconnectHandler, null);
-        }
-        _session?.Dispose();
-        _session = null;
-        _monitoredItems.Clear();
-        _tagValues.Clear();
-    }
-
-    public async Task<EAP.Core.Protocol.DataValue> ReadNodeAsync(string nodeId, CancellationToken cancellationToken = default)
+    public override async Task<EAP.Core.DataValue> ReadNodeAsync(string nodeId, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || _session == null)
         {
             Logger.Warn($"OPC UA client not connected, cannot read node: {nodeId}");
-            return EAP.Core.Protocol.DataValue.NotConnected();
+            return EAP.Core.DataValue.NotConnected();
         }
 
         try
@@ -268,11 +239,11 @@ public class OpcUaClient : IProtocolClient
         catch (Exception ex)
         {
             Logger.Error($"Error reading OPC UA node {nodeId}: {ex.Message}", ex);
-            return EAP.Core.Protocol.DataValue.Bad(ex.Message);
+            return EAP.Core.DataValue.Bad(ex.Message);
         }
     }
 
-    public async Task<bool> WriteNodeAsync(string nodeId, object value, CancellationToken cancellationToken = default)
+    public override async Task<bool> WriteNodeAsync(string nodeId, object value, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || _session == null)
         {
@@ -319,7 +290,7 @@ public class OpcUaClient : IProtocolClient
         }
     }
 
-    public async Task SubscribeNodeAsync(string nodeId, int updateRate = 1000, CancellationToken cancellationToken = default)
+    public override async Task SubscribeNodeAsync(string nodeId, int updateRate = 1000, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || _session == null)
         {
@@ -372,7 +343,7 @@ public class OpcUaClient : IProtocolClient
         {
             var nodeId = monitoredItem.StartNodeId.ToString();
             
-            Opc.Ua.DataValue opcValue = null;
+            Opc.Ua.DataValue? opcValue = null;
             if (e.NotificationValue != null && e.NotificationValue is Opc.Ua.DataValue)
             {
                 opcValue = (Opc.Ua.DataValue)e.NotificationValue;
@@ -382,19 +353,10 @@ public class OpcUaClient : IProtocolClient
                 opcValue = new Opc.Ua.DataValue(new Variant(e.NotificationValue));
             }
             
-            var value = opcValue != null ? ConvertToDataValue(opcValue) : EAP.Core.Protocol.DataValue.Bad("No value");
+            var value = opcValue != null ? ConvertToDataValue(opcValue) : EAP.Core.DataValue.Bad("No value");
             
             _tagValues[nodeId] = value;
-            
-            DataValueChanged?.Invoke(this, new DataValueChangedEventArgs
-            {
-                ConnectionId = ConnectionId,
-                NodeId = nodeId,
-                Value = value
-            });
-            
-            // 收到数据表示心跳正常
-            UpdateHeartbeatStatus(true);
+            OnDataValueChanged(nodeId, value);
         }
         catch (Exception ex)
         {
@@ -402,7 +364,7 @@ public class OpcUaClient : IProtocolClient
         }
     }
 
-    public async Task UnsubscribeNodeAsync(string nodeId, CancellationToken cancellationToken = default)
+    public override async Task UnsubscribeNodeAsync(string nodeId, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || _session == null)
         {
@@ -419,8 +381,11 @@ public class OpcUaClient : IProtocolClient
                 item.Notification -= MonitoredItem_Notification;
                 
                 var subscription = item.Subscription;
-                subscription.RemoveItem(item);
-                await subscription.ApplyChangesAsync(cancellationToken).ConfigureAwait(false);
+                subscription?.RemoveItem(item);
+                if (subscription != null)
+                {
+                    await subscription.ApplyChangesAsync(cancellationToken).ConfigureAwait(false);
+                }
                 
                 Logger.Info($"OPC UA node unsubscribed: {nodeId}");
             }
@@ -431,7 +396,7 @@ public class OpcUaClient : IProtocolClient
         }
     }
 
-    private EAP.Core.Protocol.DataValue ConvertToDataValue(Opc.Ua.DataValue opcValue)
+    private EAP.Core.DataValue ConvertToDataValue(Opc.Ua.DataValue opcValue)
     {
         var quality = DataQuality.Bad;
         if (ServiceResult.IsGood(opcValue.StatusCode))
@@ -443,7 +408,7 @@ public class OpcUaClient : IProtocolClient
             quality = DataQuality.Uncertain;
         }
 
-        return new EAP.Core.Protocol.DataValue
+        return new EAP.Core.DataValue
         {
             Value = opcValue.Value,
             Quality = quality,
@@ -452,54 +417,9 @@ public class OpcUaClient : IProtocolClient
         };
     }
 
-    private void OnConnectionStatusChanged(bool isConnected, string status, string? errorMessage = null)
+    public override void Dispose()
     {
-        ConnectionStatusChanged?.Invoke(this, new ConnectionStatusChangedEventArgs
-        {
-            ConnectionId = ConnectionId,
-            IsConnected = isConnected,
-            Status = status,
-            ErrorMessage = errorMessage,
-            Timestamp = DateTime.UtcNow
-        });
-    }
-    
-    private void UpdateHeartbeatStatus(bool isNormal)
-    {
-        bool oldStatus = _heartbeatStatus;
-        
-        if (isNormal)
-        {
-            _lastHeartbeatTime = DateTime.Now;
-            _heartbeatStatus = true;
-        }
-        else
-        {
-            // 检查是否超时
-            if (DateTime.Now - _lastHeartbeatTime > _heartbeatTimeout)
-            {
-                _heartbeatStatus = false;
-                // 心跳超时，断开连接
-                Logger.Warn($"Heartbeat timeout for device {ConnectionId}, disconnecting...");
-                _ = DisconnectAsync(CancellationToken.None);
-            }
-        }
-        
-        // 如果状态变化，触发事件
-        if (oldStatus != _heartbeatStatus)
-        {
-            HeartbeatStatusChanged?.Invoke(this, new HeartbeatStatusChangedEventArgs
-            {
-                ConnectionId = ConnectionId,
-                IsNormal = _heartbeatStatus,
-                Timestamp = DateTime.UtcNow
-            });
-        }
-    }
-
-    public void Dispose()
-    {
-        _ = DisconnectAsync(CancellationToken.None);
+        base.Dispose();
         _connectLock.Dispose();
     }
 }

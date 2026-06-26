@@ -8,11 +8,28 @@
 
   <ItemGroup>
     <PackageReference Include="log4net" Version="3.3.1" />
-    <PackageReference Include="NModbus" Version="4.0.0-alpha010" />
+    <Reference Include="NModbus">
+      <HintPath>..\packages\nmodbus\4.0.0-alpha010\lib\netstandard2.1\NModbus.dll</HintPath>
+    </Reference>
+    <Reference Include="NModbus.Interfaces">
+      <HintPath>..\packages\nmodbus.interfaces\4.0.0-alpha010\lib\netstandard2.1\NModbus.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="NModbus.Transport.Serial">
+      <HintPath>..\packages\nmodbus.transport.serial\4.0.0-alpha010\lib\netstandard2.1\NModbus.Transport.Serial.dll</HintPath>
+    </Reference>
+    <Reference Include="NModbus.Transport.IP">
+      <HintPath>..\packages\nmodbus.transport.ip\4.0.0-alpha010\lib\netstandard2.1\NModbus.Transport.IP.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>..\packages\microsoft.extensions.logging.abstractions\6.0.2\lib\netstandard2.0\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging">
+      <HintPath>..\packages\microsoft.extensions.logging\6.0.0\lib\netstandard2.0\Microsoft.Extensions.Logging.dll</HintPath>
+    </Reference>
     <PackageReference Include="OpcDaNetCore" Version="2.0.0" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.5.378.145" />
     <PackageReference Include="Secs4Net" Version="3.0.1" />
-    <PackageReference Include="System.IO.Ports" Version="9.0.0" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>
